@@ -14,7 +14,7 @@ class Plane(PhysicsObject):
 
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.normal: np.ndarray = np.array(data_object.get('normal'))
+        self.normal: np.ndarray = np.array(data_object.get('normal'), dtype=np.float64)
         self.distance_origin: float = data_object.get('dist')
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.trait = data_object.get('trait')

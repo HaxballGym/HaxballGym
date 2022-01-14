@@ -1,22 +1,26 @@
 from haxballgym.game.common_values import COLLISION_FLAG_NONE, COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import Disc
+import numpy as np
 
 class PlayerPhysics(Disc):
     """
     A class to represent the player disc object from the game.
     """
 
-    def __init__(self, data_object, data_stadium):
+    def __init__(self, data_object=None, data_stadium=None):
         
         if data_object is None:
             data_object = {}
-
+        
         self.acceleration: float = data_object.get('acceleration')
         self.kicking_acceleration: float = data_object.get('kickingAcceleration')
         self.kicking_damping: float = data_object.get('kickingDamping')
         self.kick_strength: float = data_object.get('kickStrength')
         
         super().__init__(data_object, data_stadium)
+        
+        self.position = np.array([0, 0], dtype=np.float64)
+        self.velocity = np.array([0, 0], dtype=np.float64)
         del self.trait
     
     def apply_default_values(self):

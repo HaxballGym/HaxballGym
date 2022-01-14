@@ -1,28 +1,27 @@
 
 import numpy as np
-from haxballgym.game.common_values import TEAM_SPECTATOR_ID, ACTION_BIN_UP, ACTION_BIN_RIGHT, ACTION_BIN_KICK, \
-    COLLISION_FLAG_KICK
+from haxballgym.game.common_values import TEAM_SPECTATOR_ID, ACTION_BIN_KICK, COLLISION_FLAG_KICK
 from haxballgym.game.objects.base.player_physics import PlayerPhysics
 from haxballgym.game.objects.stadium_object import Stadium
 
 
 class Player():
     
-    def __init__(self, name, disc) -> None:
+    def __init__(self, name, team=TEAM_SPECTATOR_ID) -> None:
         
         self.name = name
-        self.team = TEAM_SPECTATOR_ID
+        self.team = team
         self.bot = True
         self.action = []
         self.kicking = False
         # Once you kick the ball, the player should stop kicking. kick_cancel is used to make sure the mechanism works.
         self._kick_cancel = False
-        self.disc: PlayerPhysics = disc
+        self.disc: PlayerPhysics = PlayerPhysics()
         
     def is_player_kicking(self):
         return self.kicking and not self._kick_cancel    
     
-    def resolve_player_movement(self, stadium_game: Stadium):
+    def resolve_movement(self, stadium_game: Stadium):
         
         if self.disc is not None:
             self.kicking = self.action[ACTION_BIN_KICK]
@@ -44,8 +43,3 @@ class Player():
         
         return
     
-    def make_action(self, action):
-        self.action = action
-        self.resolve_player_movement()
-        
-        return

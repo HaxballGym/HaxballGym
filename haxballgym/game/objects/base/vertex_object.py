@@ -14,7 +14,7 @@ class Vertex(PhysicsObject):
 
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.position: np.ndarray = np.array([data_object.get('x'), data_object.get('y')])
+        self.position: np.ndarray = np.array([data_object.get('x'), data_object.get('y')], dtype=np.float64)
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.trait = data_object.get('trait')
         

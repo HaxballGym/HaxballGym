@@ -41,7 +41,7 @@ def resolve_disc_vertex_collision(disc: Disc, vertex: Vertex) -> None:
     return
 
 
-def segment_apply_bias(segment: Segment, dist: float, normal: np.ndarray) -> Tuple(float, np.ndarray):
+def segment_apply_bias(segment: Segment, dist: float, normal: np.ndarray) -> Tuple[float, np.ndarray]:
     """
     Applies the bias property during the collision between a segment and a disc
     """
@@ -59,7 +59,7 @@ def segment_apply_bias(segment: Segment, dist: float, normal: np.ndarray) -> Tup
     return dist, normal
      
        
-def resolve_disc_segment_collision_no_curve(disc: Disc, segment: Segment) -> Tuple(float, np.ndarray):
+def resolve_disc_segment_collision_no_curve(disc: Disc, segment: Segment) -> Tuple[float, np.ndarray]:
     normal_segment = segment.vertices[1].position - segment.vertices[0].position
     normal_disc_v0 = disc.position - segment.vertices[0].position
     normal_disc_v1 = disc.position - segment.vertices[1].position
@@ -69,14 +69,14 @@ def resolve_disc_segment_collision_no_curve(disc: Disc, segment: Segment) -> Tup
         
         return dist, normal
     
-    return
+    return None, None
 
 
-def resolve_disc_segment_collision_curve(disc: Disc, segment: Segment) -> Tuple(float, np.ndarray):
+def resolve_disc_segment_collision_curve(disc: Disc, segment: Segment) -> Tuple[float, np.ndarray]:
     normal_circle = disc.position - segment.circle_center
     if (
         (np.dot(normal_circle, segment.circle_tangeant[0]) > 0 and
-         np.dot(normal_circle, segment.circle_normal[1]) > 0) != (segment.curve < 0)
+         np.dot(normal_circle, segment.circle_tangeant[1]) > 0) != (segment.curve < 0)
     ):
         dist_norm = np.linalg.norm(normal_circle)
         dist = dist_norm - segment.circle_radius
@@ -84,7 +84,7 @@ def resolve_disc_segment_collision_curve(disc: Disc, segment: Segment) -> Tuple(
         
         return dist, normal
     
-    return
+    return None, None
 
 
 def resolve_disc_segment_collision(disc: Disc, segment: Segment) -> None:
@@ -96,14 +96,15 @@ def resolve_disc_segment_collision(disc: Disc, segment: Segment) -> None:
     else:
         dist, normal = resolve_disc_segment_collision_curve(disc, segment)
     
-    dist, normal = segment_apply_bias(segment, dist, normal)
+    if (dist is not None and normal is not None):
+        dist, normal = segment_apply_bias(segment, dist, normal)
     
-    if (dist < disc.radius):
-        disc.position += normal * (disc.radius - dist)
-        normal_velocity = np.dot(disc.velocity, normal)
-        if (normal_velocity < 0):
-            bouncing_factor = -(1 + disc.bouncing_coefficient + segment.bouncing_coefficient)
-            disc.velocity += normal * normal_velocity * bouncing_factor
+        if (dist < disc.radius):
+            disc.position += normal * (disc.radius - dist)
+            normal_velocity = np.dot(disc.velocity, normal)
+            if (normal_velocity < 0):
+                bouncing_factor = -(1 + disc.bouncing_coefficient + segment.bouncing_coefficient)
+                disc.velocity += normal * normal_velocity * bouncing_factor
     
     return
 
@@ -112,7 +113,7 @@ def resolve_disc_plane_collision(disc: Disc, plane: Plane) -> None:
     """
     Resolves the collision between a disc and a plane
     """
-    norm_plane = np.linalg.norm(plane.normal)
+    norm_plane = plane.normal / np.linalg.norm(plane.normal)
     dist = plane.distance_origin - np.dot(disc.position, norm_plane) + disc.radius
     if (dist > 0):
         disc.position += norm_plane * dist
@@ -132,17 +133,17 @@ def resolve_collisions(stadium_game: Stadium) -> None:
             d_a = stadium_game.discs[i]
             for j in range(i + 1, len(stadium_game.discs)):
                 d_b = stadium_game.discs[j]
-                if (((d_a.cGroup & d_b.cMask) != 0) and ((d_a.cMask & d_b.cGroup) != 0)):
+                if (((d_a.collision_group & d_b.collision_mask) != 0) and ((d_a.collision_mask & d_b.collision_group) != 0)):
                     resolve_disc_disc_collision(d_a, d_b)
-            if (d_a.invMass != 0):
+            if (d_a.inverse_mass != 0):
                 for p in stadium_game.planes:
-                    if (((d_a.cGroup & p.cMask) != 0) and ((d_a.cMask & p.cGroup) != 0)):
+                    if (((d_a.collision_group & p.collision_mask) != 0) and ((d_a.collision_mask & p.collision_group) != 0)):
                         resolve_disc_plane_collision(d_a, p)
                 for s in stadium_game.segments:
-                    if (((d_a.cGroup & s.cMask) != 0) and ((d_a.cMask & s.cGroup) != 0)):
+                    if (((d_a.collision_group & s.collision_mask) != 0) and ((d_a.collision_mask & s.collision_group) != 0)):
                         resolve_disc_segment_collision(d_a, s)
-                for v in stadium_game.vertexes:
-                    if (((d_a.cGroup & v.cMask) != 0) and ((d_a.cMask & v.cGroup) != 0)):
+                for v in stadium_game.vertices:
+                    if (((d_a.collision_group & v.collision_mask) != 0) and ((d_a.collision_mask & v.collision_group) != 0)):
                         resolve_disc_vertex_collision(d_a, v)
     
     return

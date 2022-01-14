@@ -2,9 +2,12 @@ from setuptools import setup
 
 setup(
     name='haxballgym',
-    version='0.0.1',
+    version='0.0.2',
     install_requires=[
         'gym',
         'numpy',
-        ]  #And any other dependencies required
+        ],
+    data_files=[
+        ('stadiums', ['haxballgym/stadiums/*.hbs']),
+    ]
 )

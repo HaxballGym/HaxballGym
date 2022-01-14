@@ -1,4 +1,5 @@
-from haxballgym.game.common_values import TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID
+from haxballgym.game.common_values import TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, \
+    GAME_STATE_KICKOFF, GAME_STATE_PLAYING
 
 class GameScore(object):
     
@@ -6,6 +7,7 @@ class GameScore(object):
         # The GameScore object is used to keep track of the score of the game.
         # Score limit = 0 means no score limit, same for time limit.
         self.ticks = 0
+        self.total_ticks = 0
         self.time = 0
         self.red = 0
         self.blue = 0
@@ -13,11 +15,16 @@ class GameScore(object):
         self.score_limit = score_limit if score_limit is not None else 3
         self.animation_timeout = 0
     
-    def step(self) -> None:
-        self.ticks += 1
-        self.time = self.ticks / 60
+    def step(self, state: int) -> None:
+        if state == GAME_STATE_KICKOFF:
+            self.total_ticks += 1
+        elif state == GAME_STATE_PLAYING:
+            self.total_ticks += 1
+            self.ticks += 1
+            self.time = self.ticks / 60
     
     def reset(self) -> None:
+        self.total_ticks = 0
         self.ticks = 0
         self.time = 0
         self.red = 0

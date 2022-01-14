@@ -18,7 +18,11 @@ class Segment(PhysicsObject):
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
         self.vertices_index: List[int] = [data_object.get('v0'), data_object.get('v1')]
-        self.vertices: List[Vertex] = [data_stadium.get('vertexes')[i] for i in self.vertices_index]
+        self.vertices: List[Vertex] = [
+            Vertex(data_stadium.get('vertexes')[i], data_stadium)
+            for i in self.vertices_index
+        ]
+        
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.curve: float = data_object.get('curve')
         self._curveF: float = data_object.get('curveF')
@@ -28,7 +32,7 @@ class Segment(PhysicsObject):
         # Additional properties
         self.circle_center: np.ndarray = np.zeros(2)
         self.circle_radius: float = 0
-        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)])
+        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)], dtype=np.float64)
         
         self.apply_trait(self, data_stadium)
         self.apply_default_values()

@@ -7,15 +7,15 @@ class Disc(PhysicsObject):
     A class to represent the state of a disc from the game.
     """
 
-    def __init__(self, data_object, data_stadium):
+    def __init__(self, data_object=None, data_stadium=None):
         
         if data_object is None:
             data_object = {}
         
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.position: np.ndarray = np.array(data_object.get('pos'))
-        self.velocity: np.ndarray = np.array(data_object.get('speed'))
+        self.position: np.ndarray = np.array(data_object.get('pos'), dtype=np.float64)
+        self.velocity: np.ndarray = np.array(data_object.get('speed'), dtype=np.float64)
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.radius: float = data_object.get('radius')
         self.inverse_mass: float = data_object.get('invMass')
