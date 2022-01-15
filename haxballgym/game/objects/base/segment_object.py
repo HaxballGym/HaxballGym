@@ -63,12 +63,12 @@ class Segment(PhysicsObject):
             return self._curveF
         
         if self.curve is not None:
-            curve_value = self.curve
+            curve_value = self.curve * pi / 180
             if (curve_value < 0):
                 curve_value *= -1
                 self.vertices = [self.vertices[1], self.vertices[0]]
                 self.bias = -self.bias
-
+                
             liminf = 0.17435839227423353
             limsup = 340 * pi / 180
             if (liminf < curve_value < limsup):
@@ -86,8 +86,7 @@ class Segment(PhysicsObject):
             vector_center = (self.vertices[1].position - self.vertices[0].position) / 2
             self.circle_center[0] = self.vertices[0].position[0] + vector_center[0] - vector_center[1] * self.curve
             self.circle_center[1] = self.vertices[0].position[1] + vector_center[1] + vector_center[0] * self.curve
-            
-            self.circle_radius = np.linalg.norm(self.vertices[0].position - self.circle_center)
+            self.circle_radius = np.linalg.norm(self.vertices[1].position - self.circle_center)
             
             self.circle_tangeant[0][0] = -(self.vertices[0].position[1] - self.circle_center[1])
             self.circle_tangeant[0][1] = self.vertices[0].position[0] - self.circle_center[0]

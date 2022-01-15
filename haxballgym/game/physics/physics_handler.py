@@ -63,9 +63,11 @@ def resolve_disc_segment_collision_no_curve(disc: Disc, segment: Segment) -> Tup
     normal_segment = segment.vertices[1].position - segment.vertices[0].position
     normal_disc_v0 = disc.position - segment.vertices[0].position
     normal_disc_v1 = disc.position - segment.vertices[1].position
-    if (np.dot(normal_segment, normal_disc_v0) < 0 and np.dot(normal_segment, normal_disc_v1) > 0):
-        dist = np.linalg.norm(normal_disc_v0)
-        normal = normal_disc_v0 / dist
+    if (np.dot(normal_segment, normal_disc_v0) > 0 and np.dot(normal_segment, normal_disc_v1) < 0):
+        normal = [normal_segment[1], -normal_segment[0]] / np.linalg.norm(normal_segment)
+        dist = np.dot(normal, normal_disc_v1)
+        
+        
         
         return dist, normal
     
@@ -79,8 +81,9 @@ def resolve_disc_segment_collision_curve(disc: Disc, segment: Segment) -> Tuple[
          np.dot(normal_circle, segment.circle_tangeant[1]) > 0) != (segment.curve < 0)
     ):
         dist_norm = np.linalg.norm(normal_circle)
-        dist = dist_norm - segment.circle_radius
-        normal = normal_circle / dist_norm
+        if dist_norm > 0:
+            dist = dist_norm - segment.circle_radius
+            normal = normal_circle / dist_norm
         
         return dist, normal
     

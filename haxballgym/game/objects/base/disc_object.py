@@ -1,6 +1,8 @@
 from haxballgym.game.common_values import COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
+
 import numpy as np
+import copy
 
 class Disc(PhysicsObject):
     """
@@ -30,7 +32,7 @@ class Disc(PhysicsObject):
             self.collision_group = COLLISION_FLAG_ALL
         if self.collision_mask is None:
             self.collision_mask = COLLISION_FLAG_ALL
-        if self.velocity == None:
+        if np.isnan(self.velocity):
             self.velocity = np.zeros(2)
         if self.bouncing_coefficient is None:
             self.bouncing_coefficient = 0.5
@@ -40,3 +42,13 @@ class Disc(PhysicsObject):
             self.inverse_mass = 0
         if self.damping is None:
             self.damping = 0.99
+
+    def copy(self, other: 'Disc') -> 'Disc':
+        self.collision_group = copy.copy(other.collision_group)
+        self.collision_mask = copy.copy(other.collision_mask)
+        self.position = copy.copy(other.position)
+        self.velocity = copy.copy(other.velocity)
+        self.bouncing_coefficient = copy.copy(other.bouncing_coefficient)
+        self.radius = copy.copy(other.radius)
+        self.inverse_mass = copy.copy(other.inverse_mass)
+        self.damping = copy.copy(other.damping)

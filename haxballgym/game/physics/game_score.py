@@ -31,9 +31,9 @@ class GameScore(object):
         self.blue = 0
     
     def update_score(self, team_id: int) -> None:
-        if (team_id == TEAM_RED_ID):
+        if (team_id == TEAM_BLUE_ID):
             self.red += 1
-        elif (team_id == TEAM_BLUE_ID):
+        elif (team_id == TEAM_RED_ID):
             self.blue += 1
         else:
             raise ValueError("Invalid team_id: {}".format(team_id))

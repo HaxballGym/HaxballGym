@@ -1,8 +1,8 @@
 from typing import List
 import numpy as np
-from copy import deepcopy
+import copy
 
-from haxballgym.game.common_values import COLLISION_FLAG_BLUEKO, COLLISION_FLAG_REDKO, TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, \
+from haxballgym.game.common_values import COLLISION_FLAG_BLUE, COLLISION_FLAG_BLUEKO, COLLISION_FLAG_RED, COLLISION_FLAG_REDKO, TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, \
     GAME_STATE_PLAYING, GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE
 from haxballgym.game.objects.base.disc_object import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
@@ -18,12 +18,13 @@ class Game():
         self.team_kickoff = TEAM_RED_ID
         self.stadium_file = "classic.hbs"
         self.stadium_store: Stadium = load_stadium_hbs(self.stadium_file)
-        self.stadium_game: Stadium = deepcopy(self.stadium_store)
+        self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recording = []
    
    
     def add_player(self, player: Player) -> None:
         player.disc = self.stadium_store.player_physics
+        player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
         self.players.append(player)
         return
    
@@ -46,7 +47,7 @@ class Game():
         """
         self.stadium_file = map_file
         self.stadium_store: Stadium = load_stadium_hbs(map_file)
-        self.stadium_game: Stadium = deepcopy(self.stadium_store)
+        self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         return
     
     
@@ -56,7 +57,7 @@ class Game():
             self.make_player_action(player, action)
         
         previous_discs_position = [
-            disc for disc in self.stadium_game.discs if disc.collision_group & COLLISION_FLAG_SCORE != 0
+            copy.deepcopy(disc) for disc in self.stadium_game.discs if disc.collision_group & COLLISION_FLAG_SCORE != 0
         ]
         update_discs(self.stadium_game)
         resolve_collisions(self.stadium_game)
@@ -78,7 +79,8 @@ class Game():
                 goal_vector = goal.points[1] - goal.points[0]
                 if np.cross(current_p0, disc_vector) * np.cross(current_p1, disc_vector) <= 0 and \
                    np.cross(previous_p0, goal_vector) * np.cross(current_p0, goal_vector) <= 0:
-                        return goal.team
+                       team_score = TEAM_RED_ID if goal.team == "red" else TEAM_BLUE_ID
+                       return team_score
                     
         return TEAM_SPECTATOR_ID        
     
@@ -94,6 +96,7 @@ class Game():
                     player.disc.collision_mask = 39 | kickoff_collision
             ball_disc = self.stadium_game.discs[0]
             if np.linalg.norm(ball_disc.velocity) > 0:
+                print("Kickoff made")
                 self.state = GAME_STATE_PLAYING
                 
         elif self.state == GAME_STATE_PLAYING:
@@ -102,10 +105,11 @@ class Game():
                     player.disc.collision_mask = 39
             team_goal = self.check_goal(previous_discs_position)
             if team_goal != TEAM_SPECTATOR_ID:
+                print(f"Team {team_goal} conceded a goal")
                 self.state = GAME_STATE_GOAL
                 self.score.update_score(team_goal)
                 if not self.score.is_game_over():
-                    self.team_kickoff = TEAM_BLUE_ID if team_goal == TEAM_RED_ID else TEAM_RED_ID   
+                    self.team_kickoff = TEAM_BLUE_ID if team_goal == TEAM_BLUE_ID else TEAM_RED_ID   
             elif self.score.is_game_over():
                 self.state = GAME_STATE_END
                 self.score.end_animation() 
@@ -118,6 +122,7 @@ class Game():
                     self.score.end_animation()
                 else:
                     self.reset_discs_positions()
+                    self.state = GAME_STATE_KICKOFF
                     
         elif self.state == GAME_STATE_END:
             self.score.animation_timeout -= 1
@@ -132,14 +137,7 @@ class Game():
         discs_store = self.stadium_store.discs if self.stadium_store.kickoff_reset == "full" else [self.stadium_store.discs[0]]
         
         for disc_game, disc_store in zip(discs_game, discs_store):
-            disc_game.position = disc_store.position
-            disc_game.velocity = disc_store.velocity
-            disc_game.radius = disc_store.radius
-            disc_game.bouncing_coefficient = disc_store.bouncing_coefficient
-            disc_game.inverse_mass = disc_store.inverse_mass
-            disc_game.damping = disc_store.damping
-            disc_game.collision_mask = disc_store.collision_mask
-            disc_game.collision_group = disc_store.collision_group
+            disc_game.copy(disc_store)
         
         for player in self.players:
             red_count = 0
@@ -172,7 +170,7 @@ class Game():
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
         self.team_kickoff = TEAM_RED_ID
-        self.stadium_game: Stadium = deepcopy(self.stadium_store)
+        self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recording = []
         
         return
@@ -197,21 +195,23 @@ class Game():
 if __name__ == "__main__":
     game = Game()
     
-    player_red = Player("Bob", TEAM_RED_ID)
+    custom_score = GameScore(time_limit=3, score_limit=1)
+    game.score = custom_score
+    
+    player_red = Player("Wazarr", TEAM_RED_ID)
     game.add_players([player_red])
     
     game.start()
     ball = game.stadium_game.discs[0]
-    print(ball.position)
+    ball_store = game.stadium_store.discs[0]
+    player = game.players[0]
     
-    # Check why the player doesn't collide with the ball / segments
-    for i in range(5):
-        done = False
-        while not done:
-            actions_player = [1, 0, False]
-            done = game.step([actions_player])
-            if game.score.total_ticks % 60 * 2 == 0:
-                player = game.players[0]
-                print(f"Position of {player.name}: {player.disc.position}")
-        
-        game.reset()
+    done = False
+    while not done:
+        RIGHT_ACTION = 1
+        UP_ACTION = 0
+        KICK_ACTION = False
+        actions_player = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
+        done = game.step([actions_player])
+    
+    print("Game over")
