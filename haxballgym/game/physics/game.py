@@ -8,6 +8,7 @@ from haxballgym.game.objects.base.disc_object import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
 from haxballgym.game.physics import GameScore, resolve_collisions, update_discs, Player
 
+# TODO: Add game recording
 
 class Game():
     

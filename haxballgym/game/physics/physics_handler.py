@@ -4,6 +4,7 @@ import numpy as np
 from haxballgym.game.objects.base import Disc, Vertex, Segment, Plane
 from haxballgym.game.objects import Stadium
 
+
 def resolve_disc_disc_collision(disc_a: Disc, disc_b: Disc) -> None:
     """
     Resolves the collision between two discs
@@ -66,8 +67,6 @@ def resolve_disc_segment_collision_no_curve(disc: Disc, segment: Segment) -> Tup
     if (np.dot(normal_segment, normal_disc_v0) > 0 and np.dot(normal_segment, normal_disc_v1) < 0):
         normal = [normal_segment[1], -normal_segment[0]] / np.linalg.norm(normal_segment)
         dist = np.dot(normal, normal_disc_v1)
-        
-        
         
         return dist, normal
     
