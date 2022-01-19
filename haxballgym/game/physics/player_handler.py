@@ -1,5 +1,7 @@
 
 import numpy as np
+import itertools
+
 from haxballgym.game.common_values import TEAM_SPECTATOR_ID, ACTION_BIN_KICK, COLLISION_FLAG_KICK
 from haxballgym.game.objects.base.player_physics import PlayerPhysics
 from haxballgym.game.objects.stadium_object import Stadium
@@ -7,8 +9,11 @@ from haxballgym.game.objects.stadium_object import Stadium
 
 class Player():
     
-    def __init__(self, name, team=TEAM_SPECTATOR_ID) -> None:
+    id_iterate = itertools.count()
+    
+    def __init__(self, name: str, team=TEAM_SPECTATOR_ID) -> None:
         
+        self.id = next(Player.id_iterate)
         self.name = name
         self.team = team
         self.bot = True
@@ -22,10 +27,9 @@ class Player():
         return self.kicking and not self._kick_cancel    
     
     def resolve_movement(self, stadium_game: Stadium):
-        
         if self.disc is not None:
-            self.kicking = self.action[ACTION_BIN_KICK]
-            if not self.action[ACTION_BIN_KICK]:
+            self.kicking = self.action[ACTION_BIN_KICK] == 1
+            if self.action[ACTION_BIN_KICK] == 0:
                 self._kick_cancel = False
                 
         if self.is_player_kicking():
@@ -37,7 +41,7 @@ class Player():
                         disc_stadium.velocity += normal * self.disc.kick_strength
                         self._kick_cancel = True
         
-        input_direction = self.action[:2] / np.linalg.norm(self.action[:2])
+        input_direction = self.action[:2] / np.linalg.norm(self.action[:2]) if np.linalg.norm(self.action[:2]) > 0 else np.array([0., 0.])
         player_acceleration = self.disc.kicking_acceleration if self.is_player_kicking() else self.disc.acceleration
         self.disc.velocity += input_direction * player_acceleration
         

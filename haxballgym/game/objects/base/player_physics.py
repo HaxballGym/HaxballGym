@@ -19,8 +19,8 @@ class PlayerPhysics(Disc):
         
         super().__init__(data_object, data_stadium)
         
-        self.position = np.array([0, 0], dtype=np.float64)
-        self.velocity = np.array([0, 0], dtype=np.float64)
+        self.position = np.array([0, 0], dtype=np.float)
+        self.velocity = np.array([0, 0], dtype=np.float)
         del self.trait
     
     def apply_default_values(self):

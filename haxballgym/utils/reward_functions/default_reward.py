@@ -13,7 +13,7 @@ class DefaultReward(RewardFunction):
         self.last_touch = initial_state.last_touch
 
     def get_reward(self, player: PlayerData, state: GameState, previous_action: np.ndarray) -> float:
-        return - np.linalg.norm(player.pawn_data.velocity)
+        return np.linalg.norm(player.disc.velocity)
 
     def get_final_reward(self, player: PlayerData, state: GameState, previous_action: np.ndarray) -> float:
         return self.get_reward(player, state, previous_action)

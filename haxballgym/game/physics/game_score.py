@@ -3,7 +3,7 @@ from haxballgym.game.common_values import TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTA
 
 class GameScore(object):
     
-    def __init__(self, time_limit=None, score_limit=None) -> None:
+    def __init__(self, time_limit=None, score_limit=None):
         # The GameScore object is used to keep track of the score of the game.
         # Score limit = 0 means no score limit, same for time limit.
         self.ticks = 0

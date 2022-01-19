@@ -8,15 +8,15 @@ class BallPhysics(Disc):
     A class to represent the state of a ball from the game.
     """
 
-    def __init__(self, data_object, data_stadium):
+    def __init__(self, data_object: dict, data_stadium: dict):
         
         if data_object is None:
             data_object = {}
         
         super().__init__(data_object, data_stadium)
         
-        self.position = np.array([0, 0], dtype=np.float64)
-        self.velocity = np.array([0, 0], dtype=np.float64)
+        self.position = np.array([0, 0], dtype=np.float)
+        self.velocity = np.array([0, 0], dtype=np.float)
         self.collision_group = self.collision_group | COLLISION_FLAG_SCORE | COLLISION_FLAG_KICK
         self.collision_mask = self.collision_mask ^ COLLISION_FLAG_REDKO ^ COLLISION_FLAG_BLUEKO
         del self.trait

@@ -28,10 +28,10 @@ class DefaultObs(ObsBuilder):
         enemies = []
 
         for other in state.players:
-            if other.pawn_id == player.pawn_id:
+            if other.id == player.id:
                 continue
 
-            if other.team_num == player.team_num:
+            if other.team == player.team:
                 team_obs = allies
             else:
                 team_obs = enemies
@@ -43,11 +43,10 @@ class DefaultObs(ObsBuilder):
         return np.concatenate(obs)
 
     def _add_player_to_obs(self, obs: List, player: PlayerData):
-        player_pawn = player.pawn_data
+        player_disc = player.disc
 
         obs.extend([
-            player_pawn.position,
-            player_pawn.velocity,
-            [player.is_shooting]])
+            player_disc.position,
+            player_disc.velocity])
 
-        return player_pawn
+        return player_disc

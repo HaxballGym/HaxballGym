@@ -1,8 +1,10 @@
 import numpy as np
 import gym.spaces
+from typing import Union, List
+
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.action_parsers import DiscreteAction
-from typing import Union, List
+from haxballgym.utils.common_values import NUM_ACTIONS
 
 
 class DefaultAction(DiscreteAction):
@@ -24,7 +26,7 @@ class DefaultAction(DiscreteAction):
             actions = np.asarray(actions)
 
         if len(actions.shape) == 1:
-            actions = actions.reshape((-1, 3))
+            actions = actions.reshape((-1, NUM_ACTIONS))
         elif len(actions.shape) > 2:
             raise ValueError('{} is not a valid action shape'.format(actions.shape))
         

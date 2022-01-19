@@ -7,14 +7,14 @@ class Plane(PhysicsObject):
     A class to represent the state of a plane from the game.
     """
 
-    def __init__(self, data_object, data_stadium):
+    def __init__(self, data_object: dict, data_stadium: dict):
         
         if data_object is None:
             data_object = {}
 
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.normal: np.ndarray = np.array(data_object.get('normal'), dtype=np.float64)
+        self.normal: np.ndarray = np.array(data_object.get('normal'), dtype=np.float)
         self.distance_origin: float = data_object.get('dist')
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.trait = data_object.get('trait')

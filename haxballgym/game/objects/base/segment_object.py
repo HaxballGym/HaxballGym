@@ -10,7 +10,7 @@ class Segment(PhysicsObject):
     A class to represent the state of a segment from the game.
     """
 
-    def __init__(self, data_object, data_stadium):
+    def __init__(self, data_object: dict, data_stadium: dict):
         
         if data_object is None:
             data_object = {}
@@ -32,7 +32,7 @@ class Segment(PhysicsObject):
         # Additional properties
         self.circle_center: np.ndarray = np.zeros(2)
         self.circle_radius: float = 0
-        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)], dtype=np.float64)
+        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)], dtype=np.float)
         
         self.apply_trait(self, data_stadium)
         self.apply_default_values()
@@ -55,7 +55,7 @@ class Segment(PhysicsObject):
         if self.bias is None:
             self.bias = 0
     
-    def calculate_curve(self):
+    def calculate_curve(self) -> float:
         # TODO: Figure out why this works. In the dev notes, it says it's to keep the correct float value.
         # Dev Notes on curveF: This value is only useful for exporting stadiums without precision loss.
         
@@ -78,7 +78,7 @@ class Segment(PhysicsObject):
         
         return 0
     
-    def calculate_additional_properties(self):
+    def calculate_additional_properties(self) -> None:
         """
         Calculate the additional properties of the segment
         """

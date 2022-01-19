@@ -5,6 +5,7 @@
 from time import sleep
 from typing import List, Union, Tuple, Dict, Any
 from haxballgym.envs.match import Match
+from haxballgym.utils.common_values import NUM_ACTIONS
 
 import numpy as np
 from gym import Env
@@ -27,7 +28,7 @@ class Gym(Env):
         function is `True`.
         """
 
-        state_str = self._match.get_reset_state()
+        self._match.get_reset_state()
 
         state = self._receive_state()
         self._match.episode_reset(state)
@@ -70,14 +71,13 @@ class Gym(Env):
         return obs, reward, done, info
 
     def _receive_state(self):
-        return self._match.parse_state()
+        return self._match._game_state
 
     def _send_actions(self, actions):
-        assert isinstance(actions, np.ndarray), "Invalid action type, action must be of type np.ndarray(n, 8)."
-        assert len(actions.shape) == 2, "Invalid action shape, shape must be of the form (n, 8)."
-        assert actions.shape[-1] == 8, "Invalid action shape, last dimension must be 8."
+        assert isinstance(actions, np.ndarray), f"Invalid action type, action must be of type np.ndarray(n, {NUM_ACTIONS})."
+        assert len(actions.shape) == 2, f"Invalid action shape, shape must be of the form (n, {NUM_ACTIONS})."
+        assert actions.shape[-1] == NUM_ACTIONS, f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
 
-        actions_formatted = self._match.format_actions(actions)
-        self._match.send_actions(actions_formatted) # smth like that
+        self._match._game.step(actions)
 
         return True

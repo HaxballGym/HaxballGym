@@ -6,13 +6,13 @@ from haxballgym.game.common_values import COLLISION_FLAG_BLUE, COLLISION_FLAG_BL
     GAME_STATE_PLAYING, GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE
 from haxballgym.game.objects.base.disc_object import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
-from haxballgym.game.physics import GameScore, resolve_collisions, update_discs, Player
+from haxballgym.game.physics import GameScore, Player, resolve_collisions, update_discs
 
 # TODO: Add game recording
 
 class Game():
     
-    def __init__(self) -> None:
+    def __init__(self):
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
         self.players: List[Player] = []
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     while not done:
         RIGHT_ACTION = 1
         UP_ACTION = 0
-        KICK_ACTION = False
+        KICK_ACTION = 0
         actions_player = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
         done = game.step([actions_player])
     

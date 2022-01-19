@@ -8,11 +8,11 @@ from haxballgym.game.common_values import DICT_COLLISION, DICT_KEYS
 
 class PhysicsObject(ABC):
 
-    def __init__(self, data_object, data_stadium): 
+    def __init__(self, data_object: dict, data_stadium: dict): 
         pass
     
     @staticmethod
-    def apply_trait(self, data):
+    def apply_trait(self, data: dict) -> None:
         """
         Applies the trait to the physics object.
         """
@@ -40,7 +40,7 @@ class PhysicsObject(ABC):
         pass
     
     @staticmethod
-    def transform_collision_dict(collision_dict):
+    def transform_collision_dict(collision_dict: dict) -> int:
         """
         Transforms the collision into a float.
         For example, ["ball", "red", "blue", "wall"] should return 1 + 2 + 4 + 32 = 39

@@ -10,7 +10,7 @@ class Stadium(object):
     A class to represent the state of a stadium from the game.
     """
 
-    def __init__(self, data):
+    def __init__(self, data: dict):
 
         self.name: str = data.get('name')
         self.spawn_distance: float = data.get('spawnDistance')
@@ -41,7 +41,7 @@ class Stadium(object):
             self.kickoff_reset = "partial"
 
 
-def load_stadium_hbs(file_name):
+def load_stadium_hbs(file_name: str) -> Stadium:
     """
     Load a stadium from a file with extension hbs.
     """
