@@ -19,5 +19,6 @@ class GameState(object):
         self.players: List[PlayerData] = game_object.players
         self.ball: Disc = game_object.stadium_game.discs[0]
 
-    def update(self):
-        pass
+    def update(self, game_object: Game):
+        self.red_score = game_object.score.red
+        self.blue_score = game_object.score.blue

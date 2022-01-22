@@ -2,6 +2,7 @@ import os
 from typing import List
 
 from haxballgym.envs import Match
+from haxballgym.game.physics.game_score import GameScore
 
 from haxballgym.utils.terminal_conditions import common_conditions
 from haxballgym.utils.reward_functions import DefaultReward
@@ -18,13 +19,13 @@ from haxballgym.version import print_current_release_notes
 def make(game: Game = Game(),
          tick_skip: int = 8,
          team_size: int = 1,
-         terminal_conditions: List[object] = (common_conditions.TimeoutCondition(225 * 60), common_conditions.GoalScoredCondition()),
+         terminal_conditions: List[object] = (common_conditions.TimeoutCondition(180 * 60), common_conditions.GoalScoredCondition()),
          reward_fn: object = DefaultReward(),
          obs_builder: object = DefaultObs(),
          action_parser: object = DefaultAction()):
     """
     :param tick_skip: The amount of physics ticks your action will be repeated for
-    :param team_size: Cars per team
+    :param team_size: Players per team
     :param terminal_conditions: List of terminal condition objects
     :param reward_fn: Reward function object
     :param obs_builder: Observation builder object
@@ -32,6 +33,8 @@ def make(game: Game = Game(),
     :param state_setter: State Setter object
     :return: Gym object
     """
+    
+    game.score = GameScore(time_limit=0, score_limit=0)
     
     players_red = [Player(f"P{i}", common_values.TEAM_RED_ID) for i in range(team_size)]
     players_blue = [Player(f"P{team_size + i}", common_values.TEAM_BLUE_ID) for i in range(team_size)]

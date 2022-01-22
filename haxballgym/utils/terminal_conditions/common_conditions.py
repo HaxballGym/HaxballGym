@@ -63,7 +63,7 @@ class GoalScoredCondition(TerminalCondition):
 
         if current_state.red_score != self.red_score or current_state.blue_score != self.blue_score:
             self.red_score = current_state.blue_score
-            self.blue_score = current_state.orange_score
+            self.blue_score = current_state.blue_score
             return True
         return False
 

@@ -24,7 +24,7 @@ class Game():
    
    
     def add_player(self, player: Player) -> None:
-        player.disc = self.stadium_store.player_physics
+        player.disc.copy(self.stadium_store.player_physics)
         player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
         self.players.append(player)
         return

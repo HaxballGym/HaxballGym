@@ -71,6 +71,7 @@ class Gym(Env):
         return obs, reward, done, info
 
     def _receive_state(self):
+        self._match._game_state.update(self._match._game)
         return self._match._game_state
 
     def _send_actions(self, actions):

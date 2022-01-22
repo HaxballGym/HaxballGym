@@ -15,8 +15,8 @@ class BallPhysics(Disc):
         
         super().__init__(data_object, data_stadium)
         
-        self.position = np.array([0, 0], dtype=np.float)
-        self.velocity = np.array([0, 0], dtype=np.float)
+        self.position = np.array([0, 0], dtype=float)
+        self.velocity = np.array([0, 0], dtype=float)
         self.collision_group = self.collision_group | COLLISION_FLAG_SCORE | COLLISION_FLAG_KICK
         self.collision_mask = self.collision_mask ^ COLLISION_FLAG_REDKO ^ COLLISION_FLAG_BLUEKO
         del self.trait

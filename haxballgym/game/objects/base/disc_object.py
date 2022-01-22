@@ -16,8 +16,8 @@ class Disc(PhysicsObject):
         
         self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
         self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.position: np.ndarray = np.array(data_object.get('pos'), dtype=np.float)
-        self.velocity: np.ndarray = np.array(data_object.get('speed'), dtype=np.float)
+        self.position: np.ndarray = np.array(data_object.get('pos'), dtype=float)
+        self.velocity: np.ndarray = np.array(data_object.get('speed'), dtype=float)
         self.bouncing_coefficient: float = data_object.get('bCoef')
         self.radius: float = data_object.get('radius')
         self.inverse_mass: float = data_object.get('invMass')
