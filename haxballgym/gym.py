@@ -21,14 +21,14 @@ class Gym(Env):
 
         self._prev_state = None
 
-    def reset(self, return_info=False) -> Union[List, Tuple]:
+    def reset(self, return_info=False, save_recording=False) -> Union[List, Tuple]:
         """
         The environment reset function. When called, this will reset the state of the environment and objects in the game.
         This should be called once when the environment is initialized, then every time the `done` flag from the `step()`
         function is `True`.
         """
 
-        self._match.get_reset_state()
+        self._match.get_reset_state(save_recording)
 
         state = self._receive_state()
         self._match.episode_reset(state)

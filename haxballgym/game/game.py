@@ -4,15 +4,14 @@ import copy
 
 from haxballgym.game.common_values import COLLISION_FLAG_BLUE, COLLISION_FLAG_BLUEKO, COLLISION_FLAG_RED, COLLISION_FLAG_REDKO, TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, \
     GAME_STATE_PLAYING, GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE
-from haxballgym.game.objects.base.disc_object import Disc
+from haxballgym.game.objects.base import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
-from haxballgym.game.physics import GameScore, Player, resolve_collisions, update_discs
-
-# TODO: Add game recording
+from haxballgym.game.physics import GameScore, Player, GameRecorder, resolve_collisions, update_discs
 
 class Game():
     
-    def __init__(self):
+    def __init__(self, folder_rec: str = ""):
+        self.folder_rec = folder_rec
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
         self.players: List[Player] = []
@@ -20,7 +19,7 @@ class Game():
         self.stadium_file = "classic.hbs"
         self.stadium_store: Stadium = load_stadium_hbs(self.stadium_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-        self.recording = []
+        self.recorder = GameRecorder(self, self.folder_rec)
    
    
     def add_player(self, player: Player) -> None:
@@ -54,9 +53,9 @@ class Game():
     
     def step(self, actions: np.ndarray) -> bool:
         for action, player in zip(actions, self.players):
-            # TODO: Add action to recording
             self.make_player_action(player, action)
         
+        self.recorder.step_js(actions)
         previous_discs_position = [
             copy.deepcopy(disc) for disc in self.stadium_game.discs if disc.collision_group & COLLISION_FLAG_SCORE != 0
         ]
@@ -164,33 +163,27 @@ class Game():
         for player in self.players:
             self.stadium_game.discs.append(player.disc)
         self.reset_discs_positions()
+        self.recorder.start_js()
         return
     
 
-    def stop(self) -> None:
+    def stop(self, save_recording: bool) -> None:
+        self.recorder.stop_js(save=save_recording)
+        
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
         self.team_kickoff = TEAM_RED_ID
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-        self.recording = []
+        self.recorder = GameRecorder(self, self.folder_rec)
         
         return
 
 
-    def reset(self) -> None:
-        self.stop()
+    def reset(self, save_recording: bool) -> None:
+        self.stop(save_recording)
         self.start()
         return
 
-
-    def start_recording(self):
-        # TODO: Add recording
-        pass
-    
-    
-    def stop_recording(self):
-        # TODO: Add recording
-        pass
     
     
 if __name__ == "__main__":
@@ -200,19 +193,22 @@ if __name__ == "__main__":
     game.score = custom_score
     
     player_red = Player("Wazarr", TEAM_RED_ID)
-    game.add_players([player_red])
+    player_blue = Player("Batarr", TEAM_BLUE_ID)
+    game.add_players([player_red, player_blue])
     
     game.start()
-    ball = game.stadium_game.discs[0]
-    ball_store = game.stadium_store.discs[0]
-    player = game.players[0]
     
     done = False
     while not done:
         RIGHT_ACTION = 1
         UP_ACTION = 0
         KICK_ACTION = 0
-        actions_player = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
-        done = game.step([actions_player])
+        actions_player_1 = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
+        RIGHT_ACTION = -1
+        UP_ACTION = 1
+        KICK_ACTION = 1
+        actions_player_2 = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
+        done = game.step([actions_player_1, actions_player_2])
     
+    game.stop(save_recording=True)
     print("Game over")

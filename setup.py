@@ -6,6 +6,7 @@ setup(
     install_requires=[
         'gym',
         'numpy',
+        'msgpack',
         ],
     data_files=[
         ('stadiums', ['haxballgym/stadiums/*.hbs']),

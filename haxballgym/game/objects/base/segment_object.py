@@ -32,7 +32,7 @@ class Segment(PhysicsObject):
         # Additional properties
         self.circle_center: np.ndarray = np.zeros(2)
         self.circle_radius: float = 0
-        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)], dtype=np.float)
+        self.circle_tangeant: List[np.ndarray] = np.array([np.zeros(2), np.zeros(2)], dtype=float)
         
         self.apply_trait(self, data_stadium)
         self.apply_default_values()

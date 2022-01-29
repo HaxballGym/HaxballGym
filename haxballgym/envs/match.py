@@ -115,8 +115,8 @@ class Match(Environment):
 
         return acts
     
-    def get_reset_state(self) -> bool:
-        self._game.reset()
+    def get_reset_state(self, save_recording=False) -> bool:
+        self._game.reset(save_recording)
         return True
 
     def get_config(self):

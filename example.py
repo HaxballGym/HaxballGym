@@ -1,10 +1,18 @@
 import haxballgym
+import haxballgym.game
 import time
 
-env = haxballgym.make()
+game = haxballgym.game.Game("recordings")
+env = haxballgym.make(game=game)
+i = 0
+
+# PROBLEM: Difference between JS and Python
 
 while True:
-    obs = env.reset()
+    i += 1
+    save_rec = True
+    if i % 10 == 0: save_rec = True
+    obs = env.reset(save_recording=save_rec)
     obs_1 = obs[0]
     obs_2 = obs[1]
     done = False

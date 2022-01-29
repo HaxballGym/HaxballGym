@@ -11,7 +11,7 @@ class Player():
     
     id_iterate = itertools.count()
     
-    def __init__(self, name: str, team=TEAM_SPECTATOR_ID) -> None:
+    def __init__(self, name: str, team: int = TEAM_SPECTATOR_ID) -> None:
         
         self.id = next(Player.id_iterate)
         self.name = name
