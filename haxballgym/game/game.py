@@ -35,7 +35,7 @@ class Game():
     
     def make_player_action(self, player: Player, action: np.ndarray) -> None:
         player.action = action
-        player.resolve_movement(self.stadium_game, self.score)
+        player.resolve_movement(self.stadium_game)
     
     
     def load_map(self, map_file: str) -> None:
