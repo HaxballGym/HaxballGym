@@ -26,19 +26,16 @@ class Game():
         player.disc.copy(self.stadium_store.player_physics)
         player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
         self.players.append(player)
-        return
    
      
     def add_players(self, players: List[Player]) -> None:
         for player in players:
             self.add_player(player)
-        return
     
     
     def make_player_action(self, player: Player, action: np.ndarray) -> None:
         player.action = action
-        player.resolve_movement(self.stadium_game)
-        return
+        player.resolve_movement(self.stadium_game, self.score)
     
     
     def load_map(self, map_file: str) -> None:
@@ -48,7 +45,6 @@ class Game():
         self.stadium_file = map_file
         self.stadium_store: Stadium = load_stadium_hbs(map_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-        return
     
     
     def step(self, actions: np.ndarray) -> bool:
@@ -139,9 +135,9 @@ class Game():
         for disc_game, disc_store in zip(discs_game, discs_store):
             disc_game.copy(disc_store)
         
+        red_count = 0
+        blue_count = 0
         for player in self.players:
-            red_count = 0
-            blue_count = 0
             if player.team == TEAM_RED_ID:
                 player.disc.position[0] = -self.stadium_game.spawn_distance
                 if ((red_count % 2) == 1):
@@ -153,9 +149,9 @@ class Game():
             elif player.team == TEAM_BLUE_ID:
                 player.disc.position[0] = self.stadium_game.spawn_distance
                 if ((blue_count % 2) == 1):
-                    player.disc.position[1] = -55 * (blue_count + 1) >> 1
+                    player.disc.position[1] = -55 * (blue_count + 1 >> 1)
                 else:
-                    player.disc.position[1] = 55 * (blue_count + 1) >> 1
+                    player.disc.position[1] = 55 * (blue_count + 1 >> 1)
                 blue_count += 1
 
 
@@ -164,7 +160,6 @@ class Game():
             self.stadium_game.discs.append(player.disc)
         self.reset_discs_positions()
         self.recorder.start_js()
-        return
     
 
     def stop(self, save_recording: bool) -> None:
@@ -175,14 +170,11 @@ class Game():
         self.team_kickoff = TEAM_RED_ID
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recorder = GameRecorder(self, self.folder_rec)
-        
-        return
 
 
     def reset(self, save_recording: bool) -> None:
         self.stop(save_recording)
         self.start()
-        return
 
     
     
@@ -210,5 +202,6 @@ if __name__ == "__main__":
         actions_player_2 = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
         done = game.step([actions_player_1, actions_player_2])
     
-    game.stop(save_recording=True)
+    
     print("Game over")
+    game.stop(save_recording=True)

@@ -17,9 +17,9 @@ from haxballgym.version import print_current_release_notes
 
 
 def make(game: Game = Game(),
-         tick_skip: int = 8,
+         tick_skip: int = 15,
          team_size: int = 1,
-         terminal_conditions: List[TerminalCondition] = (common_conditions.TimeoutCondition(180 * 60), common_conditions.GoalScoredCondition()),
+         terminal_conditions: List[TerminalCondition] = (common_conditions.TimeoutCondition(180 * 4), common_conditions.GoalScoredCondition()),
          reward_fn: RewardFunction = DefaultReward(),
          obs_builder: ObsBuilder = DefaultObs(),
          action_parser: ActionParser = DefaultAction()):

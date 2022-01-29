@@ -2,7 +2,6 @@
     The HaxBall gym environment.
 """
 
-from time import sleep
 from typing import List, Union, Tuple, Dict, Any
 from haxballgym.envs.match import Match
 from haxballgym.utils.common_values import NUM_ACTIONS
@@ -55,7 +54,7 @@ class Gym(Env):
         """
             
         actions = self._match.parse_actions(actions, self._prev_state)
-        actions_sent = self._send_actions(actions)
+        self._send_actions(actions)
         state = self._receive_state()
 
         obs = self._match.build_observations(state)
@@ -79,6 +78,7 @@ class Gym(Env):
         assert len(actions.shape) == 2, f"Invalid action shape, shape must be of the form (n, {NUM_ACTIONS})."
         assert actions.shape[-1] == NUM_ACTIONS, f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
 
-        self._match._game.step(actions)
+        for _ in range(self._match._tick_skip):
+            self._match._game.step(actions)
 
         return True

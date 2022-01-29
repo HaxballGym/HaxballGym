@@ -19,7 +19,7 @@ def resolve_disc_disc_collision(disc_a: Disc, disc_b: Disc) -> None:
         relative_velocity = disc_a.velocity - disc_b.velocity
         normal_velocity = np.dot(relative_velocity, normal)
         if (normal_velocity < 0):
-            bouncing_factor = -(1 + disc_a.bouncing_coefficient + disc_b.bouncing_coefficient)
+            bouncing_factor = -(1 + disc_a.bouncing_coefficient * disc_b.bouncing_coefficient)
             disc_a.velocity += normal * normal_velocity * bouncing_factor * mass_factor
             disc_b.velocity -= normal * normal_velocity * bouncing_factor * (1 - mass_factor)
             
@@ -36,7 +36,7 @@ def resolve_disc_vertex_collision(disc: Disc, vertex: Vertex) -> None:
         disc.position += normal * (disc.radius - dist)
         normal_velocity = np.dot(disc.velocity, normal)
         if (normal_velocity < 0):
-            bouncing_factor = -(1 + disc.bouncing_coefficient + vertex.bouncing_coefficient)
+            bouncing_factor = -(1 + disc.bouncing_coefficient * vertex.bouncing_coefficient)
             disc.velocity += normal * normal_velocity * bouncing_factor
             
     return
@@ -105,7 +105,7 @@ def resolve_disc_segment_collision(disc: Disc, segment: Segment) -> None:
             disc.position += normal * (disc.radius - dist)
             normal_velocity = np.dot(disc.velocity, normal)
             if (normal_velocity < 0):
-                bouncing_factor = -(1 + disc.bouncing_coefficient + segment.bouncing_coefficient)
+                bouncing_factor = -(1 + disc.bouncing_coefficient * segment.bouncing_coefficient)
                 disc.velocity += normal * normal_velocity * bouncing_factor
     
     return
@@ -121,10 +121,8 @@ def resolve_disc_plane_collision(disc: Disc, plane: Plane) -> None:
         disc.position += norm_plane * dist
         normal_velocity = np.dot(disc.velocity, norm_plane)
         if (normal_velocity < 0):
-            bouncing_factor = -(1 + disc.bouncing_coefficient + plane.bouncing_coefficient)
+            bouncing_factor = -(1 + disc.bouncing_coefficient * plane.bouncing_coefficient)
             disc.velocity += plane.normal * normal_velocity * bouncing_factor
-    
-    return
 
 
 def resolve_collisions(stadium_game: Stadium) -> None:
@@ -147,8 +145,6 @@ def resolve_collisions(stadium_game: Stadium) -> None:
                 for v in stadium_game.vertices:
                     if (((d_a.collision_group & v.collision_mask) != 0) and ((d_a.collision_mask & v.collision_group) != 0)):
                         resolve_disc_vertex_collision(d_a, v)
-    
-    return
 
 
 def update_discs(stadium_game: Stadium) -> None:
@@ -158,5 +154,3 @@ def update_discs(stadium_game: Stadium) -> None:
     for disc in stadium_game.discs:
         disc.position += disc.velocity
         disc.velocity *= disc.damping
-    
-    return

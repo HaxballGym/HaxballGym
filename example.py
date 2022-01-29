@@ -11,7 +11,6 @@ i = 0
 while True:
     i += 1
     save_rec = True
-    if i % 10 == 0: save_rec = True
     obs = env.reset(save_recording=save_rec)
     obs_1 = obs[0]
     obs_2 = obs[1]
@@ -30,5 +29,5 @@ while True:
         steps += 1
 
     length = time.time() - t0
-    print("Step time: {:1.5f} | Episode time: {:.2f} | Episode Reward: {:.2f}".format(length / steps, length, ep_reward))
-    print(f"Final game time: {env._match._game.score.time} | Final score: {env._match._game.score.red - env._match._game.score.blue} | Final ball position: {env._match._game.stadium_game.discs[0].position}")
+    print("\nStep time: {:1.5f} | Episode time: {:.2f} | Episode Reward: {:.2f}".format(length / steps, length, ep_reward))
+    print(f"Final game time: {env._match._game.score.time} | Final score: {env._match._game.score.red - env._match._game.score.blue} | Final ball position: {env._match._game.stadium_game.discs[0].position}\n")
