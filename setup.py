@@ -29,9 +29,8 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
     ],
+    include_package_data=True,
     package_data={
-        'stadiums': [
-            'haxballgym/stadiums/*.hbs'
-        ]
+        "haxballgym": ["game/stadiums/*.hbs"]
     }
 )
