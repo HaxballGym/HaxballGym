@@ -5,7 +5,7 @@ The Match object.
 from haxballgym.envs import Environment
 
 from haxballgym.game import Game
-from haxballgym.game.physics import Player
+from haxballgym.game.modules import PlayerHandler
 
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.action_parsers import ActionParser
@@ -127,7 +127,7 @@ class Match(Environment):
 
         empty_game = Game()
         empty_game_state = GameState(game_object=empty_game)
-        empty_player_list = [Player("") for _ in range(self._team_size * 2)]
+        empty_player_list = [PlayerHandler("") for _ in range(self._team_size * 2)]
         prev_inputs = np.zeros(common_values.NUM_ACTIONS)
 
         empty_game_state.players = empty_player_list

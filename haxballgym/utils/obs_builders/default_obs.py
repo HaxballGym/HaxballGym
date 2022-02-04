@@ -1,7 +1,9 @@
 import numpy as np
 from typing import Any, List
-from haxballgym.utils.gamestates import PlayerData, GameState
+
+from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.obs_builders import ObsBuilder
+from haxballgym.game.modules import PlayerHandler
 
 
 class DefaultObs(ObsBuilder):
@@ -14,7 +16,7 @@ class DefaultObs(ObsBuilder):
     def reset(self, initial_state: GameState):
         pass
 
-    def build_obs(self, player: PlayerData, state: GameState, previous_action: np.ndarray) -> Any:
+    def build_obs(self, player: PlayerHandler, state: GameState, previous_action: np.ndarray) -> Any:
         ball = state.ball
 
         obs = [ball.position,
@@ -42,7 +44,7 @@ class DefaultObs(ObsBuilder):
         obs.extend(enemies)
         return np.concatenate(obs)
 
-    def _add_player_to_obs(self, obs: List, player: PlayerData):
+    def _add_player_to_obs(self, obs: List, player: PlayerHandler):
         player_disc = player.disc
 
         obs.extend([

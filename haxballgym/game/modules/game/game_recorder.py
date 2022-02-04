@@ -5,6 +5,8 @@ import time
 
 from haxballgym.game.common_values import INPUT_DOWN, INPUT_SHOOT, INPUT_LEFT, INPUT_RIGHT, INPUT_UP
 
+# This is temporary, until we have a proper game recorder system
+# In the meantime, we will use the same recording system than my JS version
 
 def input_translate_js(actions: np.ndarray) -> int:
     result = 0
@@ -32,6 +34,7 @@ class GameRecorder():
         self.game = game
         self.folder_rec = folder_rec
         
+        self.file_name = ""
         self.recording = []
         self.player_info = []
         self.player_action = []
@@ -44,39 +47,27 @@ class GameRecorder():
         'HBR_<timestamp>_<score_red>-<score_blue>_<team_kickoff>.hbr'
         Time stamp is the current time in seconds since 01/01/1970.
         """
-        file_name = f"HBR_{str(int(time.time()))}_{self.game.score.red}-{self.game.score.blue}_{self.game.team_kickoff}.hbr"
+        file_name = f"HBR_{str(int(time.time()))}_{self.game.score.red}-{self.game.score.blue}_{self.options[0]}.hbr"
         return file_name
     
     
     def start(self):
-        pass
-    
-    
-    def start_js(self):
         self.player_info = [[player.name, f"{player.id}", player.team] for player in self.game.players]
         self.player_action = [[] for _ in self.game.players]
         self.options = [self.game.team_kickoff * 8]
+        self.file_name = self.generate_replay_name()
     
     
-    def step(self):
-        pass
-    
-    
-    def step_js(self, actions: np.ndarray):
+    def step(self, actions: np.ndarray):
         for i, action in enumerate(actions):
             self.player_action[i].append(input_translate_js(action))
     
     
-    def stop(self):
-        pass
-    
-    
-    def stop_js(self, save: bool = True):
+    def stop(self, save: bool = True):
         players_list = [[info, action] for info, action in zip(self.player_info, self.player_action)]
         if len(self.options) > 0:
             self.recording = [self.options[0], players_list]
-            file_name = self.generate_replay_name()
-            if save: self.save(file_name)
+            if save: self.save(self.file_name)
         
         self.recording = []
         self.player_info = []

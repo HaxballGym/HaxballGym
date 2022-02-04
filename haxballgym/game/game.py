@@ -1,41 +1,49 @@
 from typing import List
 import numpy as np
 import copy
+import logging
 
-from haxballgym.game.common_values import COLLISION_FLAG_BLUE, COLLISION_FLAG_BLUEKO, COLLISION_FLAG_RED, COLLISION_FLAG_REDKO, TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, \
-    GAME_STATE_PLAYING, GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE
+from haxballgym.game.common_values import (
+    COLLISION_FLAG_BLUE, COLLISION_FLAG_BLUEKO, COLLISION_FLAG_RED, COLLISION_FLAG_REDKO,
+    TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, GAME_STATE_PLAYING,
+    GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE, MAP_CLASSIC
+    
+)
 from haxballgym.game.objects.base import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
-from haxballgym.game.physics import GameScore, Player, GameRecorder, resolve_collisions, update_discs
+from haxballgym.game.modules import GameScore, GameRecorder, resolve_collisions, update_discs, PlayerHandler
 
 class Game():
     
-    def __init__(self, folder_rec: str = ""):
+    def __init__(self, stadium_file: str = MAP_CLASSIC, folder_rec: str = "", logging_level: int = logging.DEBUG):
+        
+        logging.basicConfig(level=logging_level, format="%(levelname)s - %(message)s")
+        
         self.folder_rec = folder_rec
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
-        self.players: List[Player] = []
+        self.players: List[PlayerHandler] = []
         self.team_kickoff = TEAM_RED_ID
-        self.stadium_file = "classic.hbs"
+        self.stadium_file = stadium_file
         self.stadium_store: Stadium = load_stadium_hbs(self.stadium_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recorder = GameRecorder(self, self.folder_rec)
    
    
-    def add_player(self, player: Player) -> None:
+    def add_player(self, player: PlayerHandler) -> None:
         player.disc.copy(self.stadium_store.player_physics)
         player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
         self.players.append(player)
    
      
-    def add_players(self, players: List[Player]) -> None:
+    def add_players(self, players: List[PlayerHandler]) -> None:
         for player in players:
             self.add_player(player)
     
     
-    def make_player_action(self, player: Player, action: np.ndarray) -> None:
+    def make_player_action(self, player: PlayerHandler, action: np.ndarray) -> None:
         player.action = action
-        player.resolve_movement(self.stadium_game)
+        player.resolve_movement(self.stadium_game, self.score)
     
     
     def load_map(self, map_file: str) -> None:
@@ -51,7 +59,7 @@ class Game():
         for action, player in zip(actions, self.players):
             self.make_player_action(player, action)
         
-        self.recorder.step_js(actions)
+        self.recorder.step(actions)
         previous_discs_position = [
             copy.deepcopy(disc) for disc in self.stadium_game.discs if disc.collision_group & COLLISION_FLAG_SCORE != 0
         ]
@@ -92,7 +100,7 @@ class Game():
                     player.disc.collision_mask = 39 | kickoff_collision
             ball_disc = self.stadium_game.discs[0]
             if np.linalg.norm(ball_disc.velocity) > 0:
-                print("Kickoff made")
+                logging.debug("Kickoff made")
                 self.state = GAME_STATE_PLAYING
                 
         elif self.state == GAME_STATE_PLAYING:
@@ -101,7 +109,7 @@ class Game():
                     player.disc.collision_mask = 39
             team_goal = self.check_goal(previous_discs_position)
             if team_goal != TEAM_SPECTATOR_ID:
-                print(f"Team {team_goal} conceded a goal")
+                logging.debug(f"Team {team_goal} conceded a goal")
                 self.state = GAME_STATE_GOAL
                 self.score.update_score(team_goal)
                 if not self.score.is_game_over():
@@ -159,11 +167,11 @@ class Game():
         for player in self.players:
             self.stadium_game.discs.append(player.disc)
         self.reset_discs_positions()
-        self.recorder.start_js()
+        self.recorder.start()
     
 
     def stop(self, save_recording: bool) -> None:
-        self.recorder.stop_js(save=save_recording)
+        self.recorder.stop(save=save_recording)
         
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
@@ -181,11 +189,11 @@ class Game():
 if __name__ == "__main__":
     game = Game()
     
-    custom_score = GameScore(time_limit=3, score_limit=1)
+    custom_score = GameScore(time_limit=1, score_limit=1)
     game.score = custom_score
     
-    player_red = Player("Wazarr", TEAM_RED_ID)
-    player_blue = Player("Batarr", TEAM_BLUE_ID)
+    player_red = PlayerHandler("P0", TEAM_RED_ID)
+    player_blue = PlayerHandler("P1", TEAM_BLUE_ID)
     game.add_players([player_red, player_blue])
     
     game.start()
@@ -203,5 +211,5 @@ if __name__ == "__main__":
         done = game.step([actions_player_1, actions_player_2])
     
     
-    print("Game over")
+    logging.debug("Game over")
     game.stop(save_recording=True)

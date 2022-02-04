@@ -6,8 +6,6 @@ game = haxballgym.game.Game("recordings")
 env = haxballgym.make(game=game)
 i = 0
 
-# PROBLEM: Difference between JS and Python
-
 while True:
     i += 1
     save_rec = True
@@ -30,4 +28,4 @@ while True:
 
     length = time.time() - t0
     print("\nStep time: {:1.5f} | Episode time: {:.2f} | Episode Reward: {:.2f}".format(length / steps, length, ep_reward))
-    print(f"Final game time: {env._match._game.score.time} | Final score: {env._match._game.score.red - env._match._game.score.blue} | Final ball position: {env._match._game.stadium_game.discs[0].position}\n")
+    print(f"Final game time: {env._match._game.score.time} | Final ball position: {env._match._game.stadium_game.discs[0].position}\n")

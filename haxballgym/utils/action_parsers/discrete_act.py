@@ -27,6 +27,7 @@ class DiscreteAction(ActionParser):
 
         # map all ternary actions from {0, 1, 2} to {-1, 0, 1}.
         actions[..., :2] = actions[..., :2] / (self._n_bins // 2) - 1
+        # map all binary actions from {0, 1} to {True, False}.
         actions[..., 2] = actions[..., 2] == 1
 
         return actions

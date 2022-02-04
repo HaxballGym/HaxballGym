@@ -2,7 +2,8 @@ from typing import Any, Optional, Tuple, overload, Union
 
 import numpy as np
 from haxballgym.utils.reward_functions import RewardFunction
-from haxballgym.utils.gamestates import GameState, PlayerData
+from haxballgym.utils.gamestates import GameState
+from haxballgym.game.modules import PlayerHandler
 
 
 class CombinedReward(RewardFunction):
@@ -63,7 +64,7 @@ class CombinedReward(RewardFunction):
 
     def get_reward(
             self,
-            player: PlayerData,
+            player: PlayerHandler,
             state: GameState,
             previous_action: np.ndarray
     ) -> float:
@@ -85,7 +86,7 @@ class CombinedReward(RewardFunction):
 
     def get_final_reward(
             self,
-            player: PlayerData,
+            player: PlayerHandler,
             state: GameState,
             previous_action: np.ndarray
     ) -> float:

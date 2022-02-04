@@ -60,3 +60,9 @@ INPUT_LEFT = 2
 INPUT_DOWN = 1
 INPUT_RIGHT = 8
 INPUT_SHOOT = 16
+
+MAP_CLASSIC = "classic.hbs"
+MAP_FUTSAL_CLASSIC = "futsal-classic.hbs"
+MAP_FUTSAL_BIG = "futsal-big.hbs"
+MAP_PENALTY = "penalty-soccer.hbs"
+MAP_OBSTACLE = "obstacle-challenge.hbs"

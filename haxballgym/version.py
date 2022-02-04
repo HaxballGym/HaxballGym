@@ -1,6 +1,9 @@
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 release_notes = {
+    '0.2.0': """
+    Alpha release
+    """,
     '0.1.0': """
     Initial Release
     """
