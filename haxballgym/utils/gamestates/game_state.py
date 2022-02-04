@@ -22,18 +22,18 @@ class GameState(object):
         self.last_kick_time: Optional[int] = -1
 
         self.players: List[PlayerHandler] = game_object.players
-        self.players_data: List[PlayerData] = [p.player_data for p in self.players]
         self.ball: Disc = game_object.stadium_game.discs[0]
 
     def update(self, game_object: Game):
         self.red_score = game_object.score.red
         self.blue_score = game_object.score.blue
         
-        for p_data in self.players_data:
+        for player in self.players:
+            p_data = player.player_data
             if p_data.last_touch_time > self.last_touch_time:
                 self.last_touch_time = p_data.last_touch_time
-                self.last_touch = p_data.id
+                self.last_touch = player.id
             if p_data.last_kick_time > self.last_kick_time:
                 self.last_kick_time = p_data.last_kick_time
-                self.last_kick = p_data.id
+                self.last_kick = player.id
         

@@ -2,7 +2,7 @@ import haxballgym
 import haxballgym.game
 import time
 
-game = haxballgym.game.Game("recordings")
+game = haxballgym.game.Game(folder_rec="recordings")
 env = haxballgym.make(game=game)
 i = 0
 
