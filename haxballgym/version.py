@@ -1,6 +1,9 @@
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 release_notes = {
+    '0.2.1': """
+    Fix setup error that made it so we didn't import the stadiums.
+    """,
     '0.2.0': """
     Alpha release
     """,
