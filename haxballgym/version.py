@@ -1,6 +1,12 @@
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 release_notes = {
+    '0.2.2': """
+    - Fixed stadium loading, removed obstacle map because it's currently not supported and added the Big map.
+    - Added more debug information.
+    - Added better reward functions (EventReward, AlignedReward, VelocityReward, ConstantReward).
+    - Critical: I found a misalignment between my clone and the python simulation, I will fix it in the next release.
+    """,
     '0.2.1': """
     Fix setup error that made it so we didn't import the stadiums.
     """,

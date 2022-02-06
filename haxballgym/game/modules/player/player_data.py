@@ -1,4 +1,4 @@
-from haxballgym.game.objects import stadium_object, Stadium
+from haxballgym.game.objects import Stadium
 from haxballgym.game.modules import GameScore
 
 class PlayerData(object):

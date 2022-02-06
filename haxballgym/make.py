@@ -4,8 +4,8 @@ from typing import List
 from haxballgym.envs import Match
 from haxballgym.game.modules import GameScore
 
-from haxballgym.utils.terminal_conditions import common_conditions, TerminalCondition
-from haxballgym.utils.reward_functions import DefaultReward, RewardFunction
+from haxballgym.utils.terminal_conditions import TerminalCondition, common_conditions
+from haxballgym.utils.reward_functions import RewardFunction, common_rewards
 from haxballgym.utils.obs_builders import DefaultObs, ObsBuilder
 from haxballgym.utils.action_parsers import DefaultAction, ActionParser
 
@@ -19,8 +19,8 @@ from haxballgym.version import print_current_release_notes
 def make(game: Game = Game(),
          tick_skip: int = 15,
          team_size: int = 1,
-         terminal_conditions: List[TerminalCondition] = (common_conditions.TimeoutCondition(1 * 60 * 4), common_conditions.GoalScoredCondition()),
-         reward_fn: RewardFunction = DefaultReward(),
+         terminal_conditions: List[TerminalCondition] = (common_conditions.TimeoutCondition(1 * 60 * 60 / 15), common_conditions.GoalScoredCondition()),
+         reward_fn: RewardFunction = common_rewards.EventReward(team_goal=1, team_concede=-1, touch=0.1, kick=0.1),
          obs_builder: ObsBuilder = DefaultObs(),
          action_parser: ActionParser = DefaultAction()):
     """

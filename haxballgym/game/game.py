@@ -7,7 +7,6 @@ from haxballgym.game.common_values import (
     COLLISION_FLAG_BLUE, COLLISION_FLAG_BLUEKO, COLLISION_FLAG_RED, COLLISION_FLAG_REDKO,
     TEAM_RED_ID, TEAM_BLUE_ID, TEAM_SPECTATOR_ID, GAME_STATE_KICKOFF, GAME_STATE_PLAYING,
     GAME_STATE_GOAL, GAME_STATE_END, COLLISION_FLAG_SCORE, MAP_CLASSIC
-    
 )
 from haxballgym.game.objects.base import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
@@ -109,7 +108,8 @@ class Game():
                     player.disc.collision_mask = 39
             team_goal = self.check_goal(previous_discs_position)
             if team_goal != TEAM_SPECTATOR_ID:
-                logging.debug(f"Team {team_goal} conceded a goal")
+                team_goal_string = "Red" if team_goal == TEAM_RED_ID else "Blue"
+                logging.debug(f"Team {team_goal_string} conceded a goal")
                 self.state = GAME_STATE_GOAL
                 self.score.update_score(team_goal)
                 if not self.score.is_game_over():
@@ -172,6 +172,9 @@ class Game():
 
     def stop(self, save_recording: bool) -> None:
         self.recorder.stop(save=save_recording)
+        if save_recording:
+            logging.debug(f"Recording saved under {self.recorder.filename}")
+        logging.debug(f"Game stopped with score {self.score.red}-{self.score.blue} at {round(self.score.time, 2)}s\n")
         
         self.score = GameScore()
         self.state = GAME_STATE_KICKOFF
@@ -209,7 +212,5 @@ if __name__ == "__main__":
         KICK_ACTION = 1
         actions_player_2 = [RIGHT_ACTION, UP_ACTION, KICK_ACTION]
         done = game.step([actions_player_1, actions_player_2])
-    
-    
-    logging.debug("Game over")
-    game.stop(save_recording=True)
+        
+    game.stop(save_recording=False)

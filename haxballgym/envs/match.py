@@ -28,7 +28,7 @@ class Match(Environment):
                  obs_builder: ObsBuilder,
                  action_parser: ActionParser,
                  team_size=1,
-                 tick_skip=8):
+                 tick_skip=15):
         super().__init__()
 
         self._team_size = team_size

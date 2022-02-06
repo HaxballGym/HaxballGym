@@ -3,6 +3,8 @@ from haxballgym.utils.gamestates import GameState
 from haxballgym.game.modules import PlayerHandler
 import numpy as np
 
+
+# THIS REWARD IS FOR DEMONSTRATION PURPOSES ONLY, DO NOT USE IT
 class DefaultReward(RewardFunction):
     def __init__(self):
         super().__init__()

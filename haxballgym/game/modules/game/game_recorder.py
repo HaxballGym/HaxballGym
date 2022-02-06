@@ -34,7 +34,7 @@ class GameRecorder():
         self.game = game
         self.folder_rec = folder_rec
         
-        self.file_name = ""
+        self.filename = ""
         self.recording = []
         self.player_info = []
         self.player_action = []
@@ -55,7 +55,6 @@ class GameRecorder():
         self.player_info = [[player.name, f"{player.id}", player.team] for player in self.game.players]
         self.player_action = [[] for _ in self.game.players]
         self.options = [self.game.team_kickoff * 8]
-        self.file_name = self.generate_replay_name()
     
     
     def step(self, actions: np.ndarray):
@@ -67,7 +66,8 @@ class GameRecorder():
         players_list = [[info, action] for info, action in zip(self.player_info, self.player_action)]
         if len(self.options) > 0:
             self.recording = [self.options[0], players_list]
-            if save: self.save(self.file_name)
+            self.filename = self.generate_replay_name()
+            if save: self.save(self.filename)
         
         self.recording = []
         self.player_info = []
