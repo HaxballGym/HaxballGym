@@ -30,8 +30,6 @@ class Game():
    
    
     def add_player(self, player: PlayerHandler) -> None:
-        player.disc.copy(self.stadium_store.player_physics)
-        player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
         self.players.append(player)
    
      
@@ -146,6 +144,9 @@ class Game():
         red_count = 0
         blue_count = 0
         for player in self.players:
+            player.disc.copy(self.stadium_store.player_physics)
+            player.disc.collision_group |= COLLISION_FLAG_RED if player.team == TEAM_RED_ID else COLLISION_FLAG_BLUE
+            
             if player.team == TEAM_RED_ID:
                 player.disc.position[0] = -self.stadium_game.spawn_distance
                 if ((red_count % 2) == 1):

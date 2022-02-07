@@ -1,6 +1,10 @@
-__version__ = '0.2.2'
+__version__ = '0.3.0'
 
 release_notes = {
+    '0.3.0': """
+    - Fixed bug where the game would desync from js version, due to the player disc not being reset and keeping the same velocity.
+    - Added recorder reader to read the recording file and replay it in Python (use of JS is still recommended for now).
+    """,
     '0.2.2': """
     - Fixed stadium loading, removed obstacle map because it's currently not supported and added the Big map.
     - Added more debug information.

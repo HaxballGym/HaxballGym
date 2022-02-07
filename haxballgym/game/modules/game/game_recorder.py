@@ -49,7 +49,7 @@ class GameRecorder():
         """
         file_name = f"HBR_{str(int(time.time()))}_{self.game.score.red}-{self.game.score.blue}_{self.options[0]}.hbr"
         return file_name
-    
+        
     
     def start(self):
         self.player_info = [[player.name, f"{player.id}", player.team] for player in self.game.players]
@@ -79,3 +79,11 @@ class GameRecorder():
         with open(os.path.join(os.path.curdir, self.folder_rec, file_name), 'wb+') as f:
             encoded_recording = msgpack.packb(self.recording)
             f.write(encoded_recording)
+
+
+    def read_from_file(self, file_name: str) -> None:
+        with open(file_name, 'rb') as f:
+            self.recording = msgpack.unpackb(f.read())
+            self.options = [self.recording[0]]
+            self.player_info = [info for info, _ in self.recording[1]]
+            self.player_action = [action for _, action in self.recording[1]]
