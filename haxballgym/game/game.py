@@ -10,7 +10,7 @@ from haxballgym.game.common_values import (
 )
 from haxballgym.game.objects.base import Disc
 from haxballgym.game.objects.stadium_object import Stadium, load_stadium_hbs
-from haxballgym.game.modules import GameScore, GameRecorder, resolve_collisions, update_discs, PlayerHandler
+from haxballgym.game.modules import GameScore, GameActionRecorder, resolve_collisions, update_discs, PlayerHandler
 
 class Game():
     
@@ -26,7 +26,7 @@ class Game():
         self.stadium_file = stadium_file
         self.stadium_store: Stadium = load_stadium_hbs(self.stadium_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-        self.recorder = GameRecorder(self, self.folder_rec)
+        self.recorder = GameActionRecorder(self, self.folder_rec)
    
    
     def add_player(self, player: PlayerHandler) -> None:
@@ -181,7 +181,7 @@ class Game():
         self.state = GAME_STATE_KICKOFF
         self.team_kickoff = TEAM_RED_ID
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-        self.recorder = GameRecorder(self, self.folder_rec)
+        self.recorder = GameActionRecorder(self, self.folder_rec)
 
 
     def reset(self, save_recording: bool) -> None:

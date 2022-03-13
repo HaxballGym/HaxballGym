@@ -1,6 +1,11 @@
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 release_notes = {
+    '0.3.1': """
+    - Added 2 new reward functions, VelocityPlayerToBall and VelocityBallToGoal.
+    - Added new recorder, which records positions, can be useful for detecting bugs.
+    - Edited obs builder to invert x axis if player in blue team, and inverted x player action to have symmetry with red team.
+    """,
     '0.3.0': """
     - Fixed bug where the game would desync from js version, due to the player disc not being reset and keeping the same velocity.
     - Added recorder reader to read the recording file and replay it in Python (use of JS is still recommended for now).

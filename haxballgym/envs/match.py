@@ -102,6 +102,11 @@ class Match(Environment):
         # Prevent people from accidentally modifying numpy arrays inside the ActionParser
         if isinstance(actions, np.ndarray):
             actions = np.copy(actions)
+            
+        for action, player in zip(actions, self._game_state.players):
+            if player.team == common_values.BLUE_TEAM:
+                action[0] = action[0] * -1
+        
         return self._action_parser.parse_actions(actions, state)
 
     def format_actions(self, actions: np.ndarray):

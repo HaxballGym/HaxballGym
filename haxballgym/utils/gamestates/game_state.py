@@ -30,9 +30,11 @@ class GameState(object):
         
         for player in self.players:
             p_data = player.player_data
+            
             if p_data.last_touch_time > self.last_touch_time:
                 self.last_touch_time = p_data.last_touch_time
                 self.last_touch = player.id
+                
             if p_data.last_kick_time > self.last_kick_time:
                 self.last_kick_time = p_data.last_kick_time
                 self.last_kick = player.id

@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Any, List
+from haxballgym.utils.common_values import BLUE_TEAM
 
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.obs_builders import ObsBuilder
@@ -19,10 +20,18 @@ class DefaultObs(ObsBuilder):
     def build_obs(self, player: PlayerHandler, state: GameState, previous_action: np.ndarray) -> Any:
         ball = state.ball
 
-        obs = [ball.position,
-               ball.velocity,
-               previous_action
-               ]
+        if (player.team == BLUE_TEAM):
+            obs = [
+                ball.position * [-1, 1],
+                ball.velocity * [-1, 1],
+                previous_action
+            ]
+        else:
+            obs = [
+                ball.position,
+                ball.velocity,
+                previous_action
+            ]
 
         self._add_player_to_obs(obs, player)
 
@@ -46,9 +55,16 @@ class DefaultObs(ObsBuilder):
 
     def _add_player_to_obs(self, obs: List, player: PlayerHandler):
         player_disc = player.disc
-
-        obs.extend([
-            player_disc.position,
-            player_disc.velocity])
-
-        return player_disc
+        
+        if (player.team == BLUE_TEAM):
+            obs.extend([
+                player_disc.position * [-1, 1],
+                player_disc.velocity * [-1, 1]
+            ])
+        
+        else:
+            obs.extend([
+                player_disc.position,
+                player_disc.velocity
+            ])
+    
