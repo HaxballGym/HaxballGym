@@ -36,4 +36,3 @@ class Environment:
     @abstractmethod
     def format_actions(self, actions):
         raise NotImplementedError
-

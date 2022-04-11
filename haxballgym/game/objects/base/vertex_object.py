@@ -2,22 +2,29 @@ from haxballgym.game.common_values import COLLISION_FLAG_WALL, COLLISION_FLAG_AL
 from haxballgym.game.objects.base import PhysicsObject
 import numpy as np
 
+
 class Vertex(PhysicsObject):
     """
     A class to represent the state of a vertex from the game.
     """
 
     def __init__(self, data_object: dict, data_stadium: dict):
-        
+
         if data_object is None:
             data_object = {}
 
-        self.collision_group: int = self.transform_collision_dict(data_object.get('cGroup'))
-        self.collision_mask: int = self.transform_collision_dict(data_object.get('cMask'))
-        self.position: np.ndarray = np.array([data_object.get('x'), data_object.get('y')], dtype=np.float)
-        self.bouncing_coefficient: float = data_object.get('bCoef')
-        self.trait = data_object.get('trait')
-        
+        self.collision_group: int = self.transform_collision_dict(
+            data_object.get("cGroup")
+        )
+        self.collision_mask: int = self.transform_collision_dict(
+            data_object.get("cMask")
+        )
+        self.position: np.ndarray = np.array(
+            [data_object.get("x"), data_object.get("y")], dtype=np.float
+        )
+        self.bouncing_coefficient: float = data_object.get("bCoef")
+        self.trait = data_object.get("trait")
+
         self.apply_trait(self, data_stadium)
         self.apply_default_values()
 

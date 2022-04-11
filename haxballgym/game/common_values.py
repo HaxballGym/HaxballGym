@@ -14,32 +14,32 @@ COLLISION_FLAG_C2 = 1073741824
 COLLISION_FLAG_C3 = -2147483648
 
 DICT_COLLISION = {
-    '': COLLISION_FLAG_NONE,
-    'ball': COLLISION_FLAG_BALL,
-    'red': COLLISION_FLAG_RED,
-    'blue': COLLISION_FLAG_BLUE,
-    'redKO': COLLISION_FLAG_REDKO,
-    'blueKO': COLLISION_FLAG_BLUEKO,
-    'wall': COLLISION_FLAG_WALL,
-    'all': COLLISION_FLAG_ALL,
-    'kick': COLLISION_FLAG_KICK,
-    'score': COLLISION_FLAG_SCORE,
-    'c0': COLLISION_FLAG_C0,
-    'c1': COLLISION_FLAG_C1,
-    'c2': COLLISION_FLAG_C2,
-    'c3': COLLISION_FLAG_C3
+    "": COLLISION_FLAG_NONE,
+    "ball": COLLISION_FLAG_BALL,
+    "red": COLLISION_FLAG_RED,
+    "blue": COLLISION_FLAG_BLUE,
+    "redKO": COLLISION_FLAG_REDKO,
+    "blueKO": COLLISION_FLAG_BLUEKO,
+    "wall": COLLISION_FLAG_WALL,
+    "all": COLLISION_FLAG_ALL,
+    "kick": COLLISION_FLAG_KICK,
+    "score": COLLISION_FLAG_SCORE,
+    "c0": COLLISION_FLAG_C0,
+    "c1": COLLISION_FLAG_C1,
+    "c2": COLLISION_FLAG_C2,
+    "c3": COLLISION_FLAG_C3,
 }
 
 DICT_KEYS = {
-    'bCoef': 'bouncing_coefficient',
-    'cGroup': 'collision_group',
-    'cMask': 'collision_mask',
-    'radius': 'radius',
-    'invMass': 'inverse_mass',
-    'damping': 'damping',
-    'curve': 'curve',
-    'curveF': '_curveF',
-    'bias': 'bias'
+    "bCoef": "bouncing_coefficient",
+    "cGroup": "collision_group",
+    "cMask": "collision_mask",
+    "radius": "radius",
+    "invMass": "inverse_mass",
+    "damping": "damping",
+    "curve": "curve",
+    "curveF": "_curveF",
+    "bias": "bias",
 }
 
 TEAM_SPECTATOR_ID = 0

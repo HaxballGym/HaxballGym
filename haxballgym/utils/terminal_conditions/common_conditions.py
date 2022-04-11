@@ -61,7 +61,10 @@ class GoalScoredCondition(TerminalCondition):
         because the game score is not set to 0 for both teams at the beginning of an episode.
         """
 
-        if current_state.red_score != self.red_score or current_state.blue_score != self.blue_score:
+        if (
+            current_state.red_score != self.red_score
+            or current_state.blue_score != self.blue_score
+        ):
             self.red_score = current_state.blue_score
             self.blue_score = current_state.blue_score
             return True
@@ -69,7 +72,6 @@ class GoalScoredCondition(TerminalCondition):
 
 
 class BallTouchedCondition(TerminalCondition):
-
     def __init__(self):
         super().__init__()
         self.last_touch = None
@@ -82,6 +84,7 @@ class BallTouchedCondition(TerminalCondition):
         Return `True` if the last touch does not have the same ID as the last touch from the initial state.
         """
         return current_state.last_touch != self.last_touch
+
 
 class ClassicCondition(TerminalCondition):
     def __init__(self):

@@ -7,7 +7,6 @@ from haxballgym.utils.gamestates import GameState
 
 
 class TerminalCondition(ABC):
-
     def __init__(self):
         pass
 

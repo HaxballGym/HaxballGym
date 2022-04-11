@@ -12,9 +12,9 @@ class CombinedReward(RewardFunction):
     """
 
     def __init__(
-            self,
-            reward_functions: Tuple[RewardFunction, ...],
-            reward_weights: Optional[Tuple[float, ...]] = None
+        self,
+        reward_functions: Tuple[RewardFunction, ...],
+        reward_weights: Optional[Tuple[float, ...]] = None,
     ):
         """
         Creates the combined reward using multiple rewards, and a potential set
@@ -30,13 +30,16 @@ class CombinedReward(RewardFunction):
 
         if len(self.reward_functions) != len(self.reward_weights):
             raise ValueError(
-                (f"Reward functions list length ({len(self.reward_functions)}) and reward weights " \
-                 f"length ({len(self.reward_weights)}) must be equal"
+                (
+                    f"Reward functions list length ({len(self.reward_functions)}) and reward weights "
+                    f"length ({len(self.reward_weights)}) must be equal"
                 )
             )
 
     @classmethod
-    def from_zipped(cls, *rewards_and_weights: Union[RewardFunction, Tuple[RewardFunction, float]]) -> "CombinedReward":
+    def from_zipped(
+        cls, *rewards_and_weights: Union[RewardFunction, Tuple[RewardFunction, float]]
+    ) -> "CombinedReward":
         """
         Alternate constructor which takes any number of either rewards, or (reward, weight) tuples.
 
@@ -48,7 +51,7 @@ class CombinedReward(RewardFunction):
             if isinstance(value, tuple):
                 r, w = value
             else:
-                r, w = value, 1.
+                r, w = value, 1.0
             rewards.append(r)
             weights.append(w)
         return cls(tuple(rewards), tuple(weights))
@@ -63,10 +66,7 @@ class CombinedReward(RewardFunction):
             func.reset(initial_state)
 
     def get_reward(
-            self,
-            player: PlayerHandler,
-            state: GameState,
-            previous_action: np.ndarray
+        self, player: PlayerHandler, state: GameState, previous_action: np.ndarray
     ) -> float:
         """
         Returns the reward for a player on the terminal state.
@@ -85,10 +85,7 @@ class CombinedReward(RewardFunction):
         return float(np.dot(self.reward_weights, rewards))
 
     def get_final_reward(
-            self,
-            player: PlayerHandler,
-            state: GameState,
-            previous_action: np.ndarray
+        self, player: PlayerHandler, state: GameState, previous_action: np.ndarray
     ) -> float:
         """
         Returns the reward for a player on the terminal state.

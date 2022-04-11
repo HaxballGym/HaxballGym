@@ -8,7 +8,7 @@ ep_reward = 0
 
 while True:
     save_rec = False
-    if (abs(ep_reward) > 1):
+    if abs(ep_reward) > 1:
         save_rec = True
     obs = env.reset(save_recording=save_rec)
     obs_1 = obs[0]
@@ -28,6 +28,8 @@ while True:
         steps += 1
 
     length = time.time() - t0
-    print("Step time: {:1.5f} | Episode time: {:.2f} | Episode Reward: {:.2f}".format(length / steps, length, ep_reward))
-    print(f"Final game time: {env._match._game.score.time} | Final ball position: {env._match._game.stadium_game.discs[0].position}\n" + \
-        f"Final red player position: {env._match._game.players[0].disc.position} | Final blue player position: {env._match._game.players[1].disc.position}")
+    print(
+        "Step time: {:1.5f} | Episode time: {:.2f} | Episode Reward: {:.2f}".format(
+            length / steps, length, ep_reward
+        )
+    )

@@ -10,7 +10,6 @@ from typing import Any
 
 
 class ActionParser(ABC):
-
     def __init__(self):
         pass
 
@@ -18,7 +17,7 @@ class ActionParser(ABC):
     def get_action_space(self) -> gym.spaces.Space:
         """
         Function that returns the action space type. It will be called during the initialization of the environment.
-        
+
         :return: The type of the action space
         """
         raise NotImplementedError

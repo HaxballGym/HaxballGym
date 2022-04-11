@@ -32,13 +32,10 @@ class Gym(Env):
         state = self._receive_state()
         self._match.episode_reset(state)
         self._prev_state = state
-        
+
         obs = self._match.build_observations(state)
         if return_info:
-            info = {
-                'state': state,
-                'result': self._match.get_result(state)
-            }
+            info = {"state": state, "result": self._match.get_result(state)}
             return obs, info
         return obs
 
@@ -52,7 +49,7 @@ class Gym(Env):
         :param actions: An object containing actions, in the format specified by the `ActionParser`.
         :return: A tuple containing (obs, rewards, done, info)
         """
-            
+
         actions = self._match.parse_actions(actions, self._prev_state)
         self._send_actions(actions)
         state = self._receive_state()
@@ -62,10 +59,7 @@ class Gym(Env):
         reward = self._match.get_rewards(state, done)
         self._prev_state = state
 
-        info = {
-            'state': state,
-            'result': self._match.get_result(state)
-        }
+        info = {"state": state, "result": self._match.get_result(state)}
 
         return obs, reward, done, info
 
@@ -74,9 +68,15 @@ class Gym(Env):
         return self._match._game_state
 
     def _send_actions(self, actions):
-        assert isinstance(actions, np.ndarray), f"Invalid action type, action must be of type np.ndarray(n, {NUM_ACTIONS})."
-        assert len(actions.shape) == 2, f"Invalid action shape, shape must be of the form (n, {NUM_ACTIONS})."
-        assert actions.shape[-1] == NUM_ACTIONS, f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
+        assert isinstance(
+            actions, np.ndarray
+        ), f"Invalid action type, action must be of type np.ndarray(n, {NUM_ACTIONS})."
+        assert (
+            len(actions.shape) == 2
+        ), f"Invalid action shape, shape must be of the form (n, {NUM_ACTIONS})."
+        assert (
+            actions.shape[-1] == NUM_ACTIONS
+        ), f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
 
         for _ in range(self._match._tick_skip):
             self._match._game.step(actions)

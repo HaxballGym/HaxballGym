@@ -10,7 +10,6 @@ from typing import Any
 
 
 class ObsBuilder(ABC):
-
     def __init__(self):
         pass
 
@@ -26,7 +25,9 @@ class ObsBuilder(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def build_obs(self, player: PlayerHandler, state: GameState, previous_action: np.ndarray) -> Any:
+    def build_obs(
+        self, player: PlayerHandler, state: GameState, previous_action: np.ndarray
+    ) -> Any:
         """
         Function to build observations for a policy. This is where all observations will be constructed every step and
         every reset. This function is given a player argument, and it is expected that the observation returned by this

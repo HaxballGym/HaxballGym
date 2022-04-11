@@ -19,16 +19,17 @@ import numpy as np
 from typing import List, Union, Any
 
 
-
 class Match(Environment):
-    def __init__(self,
-                 game: Game,
-                 reward_function: RewardFunction,
-                 terminal_conditions: TerminalCondition,
-                 obs_builder: ObsBuilder,
-                 action_parser: ActionParser,
-                 team_size=1,
-                 tick_skip=15):
+    def __init__(
+        self,
+        game: Game,
+        reward_function: RewardFunction,
+        terminal_conditions: TerminalCondition,
+        obs_builder: ObsBuilder,
+        action_parser: ActionParser,
+        team_size=1,
+        tick_skip=15,
+    ):
         super().__init__()
 
         self._team_size = team_size
@@ -41,7 +42,9 @@ class Match(Environment):
         self._game_state = GameState(game_object=game)
 
         if type(terminal_conditions) not in (tuple, list):
-            self._terminal_conditions = [terminal_conditions, ]
+            self._terminal_conditions = [
+                terminal_conditions,
+            ]
 
         self.agents = self._team_size * 2
 
@@ -49,7 +52,9 @@ class Match(Environment):
         self._auto_detect_obs_space()
         self.action_space = self._action_parser.get_action_space()
 
-        self._prev_actions = np.zeros((self.agents, common_values.NUM_ACTIONS), dtype=float)
+        self._prev_actions = np.zeros(
+            (self.agents, common_values.NUM_ACTIONS), dtype=float
+        )
 
     def episode_reset(self, initial_state: GameState):
         self._prev_actions.fill(0)
@@ -78,9 +83,13 @@ class Match(Environment):
             player = state.players[i]
 
             if done:
-                reward = self._reward_fn.get_final_reward(player, state, self._prev_actions[i])
+                reward = self._reward_fn.get_final_reward(
+                    player, state, self._prev_actions[i]
+                )
             else:
-                reward = self._reward_fn.get_reward(player, state, self._prev_actions[i])
+                reward = self._reward_fn.get_reward(
+                    player, state, self._prev_actions[i]
+                )
 
             rewards.append(reward)
 
@@ -102,12 +111,14 @@ class Match(Environment):
         # Prevent people from accidentally modifying numpy arrays inside the ActionParser
         if isinstance(actions, np.ndarray):
             actions = np.copy(actions)
-            
-        for action, player in zip(actions, self._game_state.players):
+
+        actions_parsed = self._action_parser.parse_actions(actions, state)
+
+        for action, player in zip(actions_parsed, self._game_state.players):
             if player.team == common_values.BLUE_TEAM:
                 action[0] = action[0] * -1
-        
-        return self._action_parser.parse_actions(actions, state)
+
+        return actions_parsed
 
     def format_actions(self, actions: np.ndarray):
         self._prev_actions[:] = actions[:]
@@ -119,14 +130,13 @@ class Match(Environment):
                 acts.append(float(act))
 
         return acts
-    
+
     def get_reset_state(self, save_recording=False) -> bool:
         self._game.reset(save_recording)
         return True
 
     def get_config(self):
-        return [self._team_size,
-                self._tick_skip]
+        return [self._team_size, self._tick_skip]
 
     def _auto_detect_obs_space(self):
 
@@ -137,6 +147,10 @@ class Match(Environment):
 
         empty_game_state.players = empty_player_list
 
-        obs_shape = np.shape(self._obs_builder.build_obs(empty_player_list[0], empty_game_state, prev_inputs))
+        obs_shape = np.shape(
+            self._obs_builder.build_obs(
+                empty_player_list[0], empty_game_state, prev_inputs
+            )
+        )
 
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs_shape)
