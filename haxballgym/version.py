@@ -1,6 +1,9 @@
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 release_notes = {
+    "0.3.3": """
+    - Fix setup error that made it so we didn't import the stadiums. Once again.
+    """,
     "0.3.2": """
     - Fixed action parser, the symmetry was broken for the blue team.
     - Removed recording reader, will be added back in haxballgym-tools soon.
