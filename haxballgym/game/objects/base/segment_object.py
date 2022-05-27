@@ -1,5 +1,6 @@
 from math import pi, tan
 from typing import List
+from ursina import Entity, Mesh
 from haxballgym.game.common_values import COLLISION_FLAG_WALL, COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
 from haxballgym.game.objects.base import Vertex
@@ -32,7 +33,9 @@ class Segment(PhysicsObject):
         self.curve: float = data_object.get("curve")
         self._curveF: float = data_object.get("curveF")
         self.bias: float = data_object.get("bias")
-        self.trait = data_object.get("trait")
+        self.color: str = data_object.get("color")
+        self.visible: bool = data_object.get("vis")
+        self.trait: str = data_object.get("trait")
 
         # Additional properties
         self.circle_center: np.ndarray = np.zeros(2)
@@ -40,6 +43,7 @@ class Segment(PhysicsObject):
         self.circle_tangeant: List[np.ndarray] = np.array(
             [np.zeros(2), np.zeros(2)], dtype=float
         )
+        self.circle_angle: np.ndarray = np.zeros(2)
 
         self.apply_trait(self, data_stadium)
         self.apply_default_values()
@@ -61,10 +65,14 @@ class Segment(PhysicsObject):
             self.curve = 0
         if self.bias is None:
             self.bias = 0
+        if self.color is None:
+            self.color = "000000"
+        if self.visible is None:
+            self.visible = "true"
 
     def calculate_curve(self) -> float:
         # TODO: Figure out why this works. In the dev notes, it says it's to keep the correct float value.
-        # Dev Notes on curveF: This value is only useful for exporting stadiums without precision loss.
+        # Dev notes on curveF: This value is only useful for exporting stadiums without precision loss.
 
         if self._curveF is not None:
             return self._curveF
@@ -118,5 +126,47 @@ class Segment(PhysicsObject):
                 self.vertices[1].position[0] - self.circle_center[0]
             )
 
+            self.circle_angle[0] = np.arctan2(
+                self.vertices[0].position[1] - self.circle_center[1],
+                self.vertices[0].position[0] - self.circle_center[0],
+            )
+            self.circle_angle[1] = np.arctan2(
+                self.vertices[1].position[1] - self.circle_center[1],
+                self.vertices[1].position[0] - self.circle_center[0],
+            )
+
+            # Arc is always clockwise
+            while self.circle_angle[1] < self.circle_angle[0]:
+                self.circle_angle[1] += 2 * pi
+
             if self.curve < 0:
                 self.circle_tangeant = -self.circle_tangeant
+
+    def get_entity(self) -> Entity:
+        if self.visible is False:
+            return None
+
+        if self.curve != 0:
+            arc_vertices = self.arc(
+                x=self.circle_center[0],
+                y=self.circle_center[1],
+                radius=self.circle_radius,
+                start_angle=self.circle_angle[0],
+                end_angle=self.circle_angle[1],
+                segments=64,
+                clockwise=True,
+            )
+            vert_mesh = tuple((v[0], v[1], 0) for v in arc_vertices)
+        else:
+            vert_mesh = tuple((v.position[0], v.position[1], 0) for v in self.vertices)
+
+        line_entity_mesh = Entity(
+            model=Mesh(
+                vertices=vert_mesh,
+                mode="line",
+                thickness=8,
+            ),
+            color=self.parse_color_entity(self.color),
+        )
+
+        return line_entity_mesh

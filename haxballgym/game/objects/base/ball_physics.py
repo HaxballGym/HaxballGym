@@ -24,6 +24,7 @@ class BallPhysics(Disc):
 
         self.position = np.array([0, 0], dtype=float)
         self.velocity = np.array([0, 0], dtype=float)
+        self.gravity = np.array([0, 0], dtype=float)
 
         self.collision_group = (
             self.collision_group | COLLISION_FLAG_SCORE | COLLISION_FLAG_KICK
@@ -49,3 +50,5 @@ class BallPhysics(Disc):
             self.inverse_mass = 1
         if self.damping is None:
             self.damping = 0.99
+        if self.color is None:
+            self.color = "FFFFFF"

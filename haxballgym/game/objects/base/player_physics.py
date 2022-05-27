@@ -22,6 +22,8 @@ class PlayerPhysics(Disc):
 
         self.position = np.array([0, 0], dtype=np.float)
         self.velocity = np.array([0, 0], dtype=np.float)
+        self.gravity = np.array([0, 0], dtype=np.float)
+        self.color = "FFFFFF"
         del self.trait
 
     def apply_default_values(self):

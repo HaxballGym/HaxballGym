@@ -40,6 +40,7 @@ DICT_KEYS = {
     "curve": "curve",
     "curveF": "_curveF",
     "bias": "bias",
+    "vis": "visible",
 }
 
 TEAM_SPECTATOR_ID = 0
@@ -66,3 +67,6 @@ MAP_BIG = "big.hbs"
 MAP_FUTSAL_CLASSIC = "futsal-classic.hbs"
 MAP_FUTSAL_BIG = "futsal-big.hbs"
 MAP_PENALTY = "penalty-soccer.hbs"
+
+TEAM_RED_COLOR = "E56E56"
+TEAM_BLUE_COLOR = "5689E5"

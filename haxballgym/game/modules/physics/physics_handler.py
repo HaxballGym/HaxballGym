@@ -183,4 +183,4 @@ def update_discs(stadium_game: Stadium) -> None:
     """
     for disc in stadium_game.discs:
         disc.position += disc.velocity
-        disc.velocity *= disc.damping
+        disc.velocity = (disc.velocity + disc.gravity) * disc.damping

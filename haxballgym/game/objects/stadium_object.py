@@ -25,6 +25,9 @@ class Stadium(object):
         self.name: str = data.get("name")
         self.spawn_distance: float = data.get("spawnDistance")
         self.kickoff_reset: str = data.get("kickoffReset")
+        self.width: float = data.get("width")
+        self.height: float = data.get("height")
+        self.kickoff_radius: float = data.get("kickoffRadius")
 
         traits = data.get("traits")
         traits_name = [t for t in traits]
@@ -38,6 +41,7 @@ class Stadium(object):
         self.goals: List[Goal] = [Goal(g, data) for g in data.get("goals")]
         self.discs: List[Disc] = [Disc(d, data) for d in data.get("discs")]
         self.planes: List[Plane] = [Plane(p, data) for p in data.get("planes")]
+
         self.player_physics: PlayerPhysics = PlayerPhysics(
             data.get("playerPhysics"), data
         )

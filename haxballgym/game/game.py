@@ -189,6 +189,7 @@ class Game:
                 if player.team == TEAM_RED_ID
                 else COLLISION_FLAG_BLUE
             )
+            player.set_player_color()
 
             if player.team == TEAM_RED_ID:
                 player.disc.position[0] = -self.stadium_game.spawn_distance

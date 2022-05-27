@@ -3,7 +3,10 @@ The physics object.
 """
 
 from abc import ABC, abstractmethod
+
+from numpy import cos, sin
 from haxballgym.game.common_values import DICT_COLLISION, DICT_KEYS
+from ursina.color import rgb, Color
 
 
 class PhysicsObject(ABC):
@@ -52,3 +55,32 @@ class PhysicsObject(ABC):
             return None
         else:
             return sum(DICT_COLLISION[key] for key in collision_dict)
+
+    @staticmethod
+    def parse_color_entity(color: str) -> Color:
+        (r, g, b) = tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))
+        return rgb(r, g, b)
+
+    @staticmethod
+    def arc(
+        x: float,
+        y: float,
+        radius: float,
+        start_angle: float,
+        end_angle: float,
+        clockwise: bool = True,
+        segments: int = 16,
+    ) -> list:
+        """
+        Returns a list of points for an arc.
+        """
+        points = []
+        for i in range(segments + 1):
+            angle = start_angle + (end_angle - start_angle) * i / segments
+            x_pos = x + radius * cos(angle)
+            y_pos = y + radius * sin(angle)
+            points.append((x_pos, y_pos))
+        if clockwise:
+            return points[::-1]
+        else:
+            return points

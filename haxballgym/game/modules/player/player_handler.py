@@ -2,7 +2,11 @@ import numpy as np
 import itertools
 
 from haxballgym.game.common_values import (
+    TEAM_RED_ID,
+    TEAM_BLUE_ID,
     TEAM_SPECTATOR_ID,
+    TEAM_RED_COLOR,
+    TEAM_BLUE_COLOR,
     ACTION_BIN_KICK,
     COLLISION_FLAG_KICK,
 )
@@ -28,6 +32,14 @@ class PlayerHandler(object):
         self._kick_cancel = False
         self.disc: PlayerPhysics = PlayerPhysics()
         self.player_data = PlayerData()
+
+        self.set_player_color()
+
+    def set_player_color(self) -> None:
+        if self.team == TEAM_RED_ID:
+            self.disc.color = TEAM_RED_COLOR
+        elif self.team == TEAM_BLUE_ID:
+            self.disc.color = TEAM_BLUE_COLOR
 
     def is_player_kicking(self):
         return self.kicking and not self._kick_cancel
