@@ -1,6 +1,6 @@
 from math import pi, tan
 from typing import List
-from ursina import Entity, Mesh
+from ursina import Entity, Pipe
 from haxballgym.game.common_values import COLLISION_FLAG_WALL, COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
 from haxballgym.game.objects.base import Vertex
@@ -147,13 +147,19 @@ class Segment(PhysicsObject):
             return None
 
         if self.curve != 0:
+            # TODO: add the radius as a parameter
+            # this is to draw enough segments, but not too many depending on the angle
+            nb_segments = int(
+                (self.circle_angle[1] - self.circle_angle[0]) / (2 * pi) * 32
+            )
+
             arc_vertices = self.arc(
                 x=self.circle_center[0],
                 y=self.circle_center[1],
                 radius=self.circle_radius,
                 start_angle=self.circle_angle[0],
                 end_angle=self.circle_angle[1],
-                segments=64,
+                segments=nb_segments,
                 clockwise=True,
             )
             vert_mesh = tuple((v[0], v[1], 0) for v in arc_vertices)
@@ -161,10 +167,9 @@ class Segment(PhysicsObject):
             vert_mesh = tuple((v.position[0], v.position[1], 0) for v in self.vertices)
 
         line_entity_mesh = Entity(
-            model=Mesh(
-                vertices=vert_mesh,
-                mode="line",
-                thickness=8,
+            model=Pipe(
+                path=vert_mesh,
+                thicknesses=[3],
             ),
             color=self.parse_color_entity(self.color),
         )

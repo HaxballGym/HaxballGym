@@ -1,13 +1,14 @@
+from numpy import pi
 from ursina import *
-from ursina.prefabs.video_recorder import VideoRecorderUI, VideoRecorder
-from ursina.application import paused, pause, resume
 
 from haxballgym.game import Game
 from haxballgym.game.common_values import TEAM_BLUE_ID, TEAM_RED_ID
 
 from haxballgym.game.modules.game.game_score import GameScore
 from haxballgym.game.modules.player.player_handler import PlayerHandler
+from haxballgym.game.objects.base.physics_object import PhysicsObject
 
+# Check SDF for creating better curves
 
 game = Game()
 
@@ -20,13 +21,13 @@ game.add_players([player_red, player_blue])
 
 game.start()
 
-segment_entities = [segment.get_entity() for segment in game.stadium_game.segments]
-disc_entities = [disc.get_entity() for disc in game.stadium_game.discs]
-
 window.borderless = False
 window.vsync = True
 
 app = Ursina()
+
+disc_entities = [disc.get_entity() for disc in game.stadium_game.discs]
+segment_entities = [segment.get_entity() for segment in game.stadium_game.segments]
 
 window.title = "HaxballGym"
 window.exit_button.visible = False
@@ -51,12 +52,8 @@ def update():
         done = False
 
 
-background_entities = []
-
 camera.orthographic = True
 camera.position = Vec2(0, 0)
 camera.fov = 480
-
-vr = VideoRecorderUI()
 
 app.run()
