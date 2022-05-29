@@ -7,3 +7,4 @@ from .goal_object import Goal
 from .trait_object import Trait
 from .ball_physics import BallPhysics
 from .player_physics import PlayerPhysics
+from .background_object import Background

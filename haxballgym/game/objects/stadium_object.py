@@ -8,6 +8,7 @@ from haxballgym.game.objects.base import (
     Trait,
     PlayerPhysics,
     BallPhysics,
+    Background,
 )
 import json
 import importlib.resources as pkg_resources
@@ -36,6 +37,7 @@ class Stadium(object):
             Trait(v, k) for v, k in zip(traits_data, traits_name)
         ]
 
+        self.background: Background = Background(data.get("bg"))
         self.vertices: List[Vertex] = [Vertex(v, data) for v in data.get("vertexes")]
         self.segments: List[Segment] = [Segment(s, data) for s in data.get("segments")]
         self.goals: List[Goal] = [Goal(g, data) for g in data.get("goals")]
