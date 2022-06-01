@@ -150,7 +150,7 @@ class Segment(PhysicsObject):
             # TODO: add the radius as a parameter
             # this is to draw enough segments, but not too many depending on the angle
             nb_segments = int(
-                (self.circle_angle[1] - self.circle_angle[0]) / (2 * pi) * 32
+                (self.circle_angle[1] - self.circle_angle[0]) / (2 * pi) * 64
             )
 
             arc_vertices = self.arc(
@@ -162,7 +162,7 @@ class Segment(PhysicsObject):
                 segments=nb_segments,
                 clockwise=True,
             )
-            vert_mesh = tuple((v[0], v[1], 0) for v in arc_vertices)
+            vert_mesh = tuple((v[0], v[1], 0) for (k, v) in enumerate(arc_vertices))
         else:
             vert_mesh = tuple((v.position[0], v.position[1], 0) for v in self.vertices)
 

@@ -77,6 +77,7 @@ class Disc(PhysicsObject):
             z=0,
             color=self.parse_color_entity(self.color),
             scale=(self.radius + 0.5) * 2,
+            always_on_top=True,
         )
 
         return disc_entity
