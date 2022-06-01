@@ -20,7 +20,7 @@ class Vertex(PhysicsObject):
             data_object.get("cMask")
         )
         self.position: np.ndarray = np.array(
-            [data_object.get("x"), data_object.get("y")], dtype=np.float
+            [data_object.get("x"), data_object.get("y")], dtype=float
         )
         self.bouncing_coefficient: float = data_object.get("bCoef")
         self.trait = data_object.get("trait")

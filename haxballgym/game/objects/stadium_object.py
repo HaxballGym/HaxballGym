@@ -30,7 +30,7 @@ class Stadium(object):
         self.height: float = data.get("height")
         self.kickoff_radius: float = data.get("kickoffRadius")
 
-        traits = data.get("traits")
+        traits: dict = data.get("traits")
         traits_name = [t for t in traits]
         traits_data = [traits.get(t) for t in traits_name]
         self.traits: List[Trait] = [

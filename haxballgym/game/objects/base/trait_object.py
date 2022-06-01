@@ -22,7 +22,8 @@ class Trait(PhysicsObject):
         self.radius: float = data_object.get("radius")
         self.inverse_mass: float = data_object.get("invMass")
         self.damping: float = data_object.get("damping")
-        self.trait = data_object.get("trait")
+        self.color: str = data_object.get("color")
+        self.trait: str = data_object.get("trait")
 
     def apply_default_values(self):
         pass

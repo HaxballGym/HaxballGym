@@ -41,6 +41,7 @@ DICT_KEYS = {
     "curveF": "_curveF",
     "bias": "bias",
     "vis": "visible",
+    "color": "color",
 }
 
 TEAM_SPECTATOR_ID = 0

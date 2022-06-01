@@ -56,7 +56,7 @@ class Disc(PhysicsObject):
         if self.color is None:
             self.color = "FFFFFF"
 
-    def copy(self, other: "Disc") -> "Disc":
+    def copy(self, other: "Disc") -> None:
         self.collision_group = copy.copy(other.collision_group)
         self.collision_mask = copy.copy(other.collision_mask)
         self.position = copy.copy(other.position)

@@ -1,15 +1,19 @@
-from ursina import *
+from ursina import Ursina, window, camera, Vec2
+import logging
 
 from haxballgym.game import Game
+from haxballgym.game import common_values as cv
 from haxballgym.game.common_values import TEAM_BLUE_ID, TEAM_RED_ID
 
 from haxballgym.game.modules.game.game_score import GameScore
 from haxballgym.game.modules.player.player_handler import PlayerHandler
-from haxballgym.game.objects.base.physics_object import PhysicsObject
 
 # Check SDF for creating better curves
 
-game = Game()
+game = Game(
+    stadium_file=cv.MAP_FUTSAL_CLASSIC,
+    logging_level=logging.NOTSET,
+)
 
 custom_score = GameScore(time_limit=1, score_limit=1)
 game.score = custom_score
@@ -28,9 +32,9 @@ app = Ursina()
 window.title = "HaxballGym"
 window.exit_button.visible = False
 
+disc_entities = [disc.get_entity() for disc in game.stadium_game.discs]
 segment_entities = [segment.get_entity() for segment in game.stadium_game.segments]
 background_entities = game.stadium_game.background.get_entities()
-disc_entities = [disc.get_entity() for disc in game.stadium_game.discs]
 
 
 def update():
@@ -54,26 +58,6 @@ def update():
 
 camera.orthographic = True
 camera.position = Vec2(0, 0)
-camera.fov = 480
-
-load_texture("grasstile", "tiles/grasstile.png")
-
-for x in range(0, 2 * game.stadium_game.background.limit_width, 128):
-    for y in range(0, 2 * game.stadium_game.background.limit_height, 128):
-        Sprite(
-            texture="grasstile",
-            ppu=1,
-            x=x + 64 - game.stadium_game.background.limit_width,
-            y=y + 64 - game.stadium_game.background.limit_height,
-            z=1,
-        )
-
-s = Sky()
-s = Entity(
-    scale=9900,
-    model="quad",
-    color=game.stadium_game.background.fill_color,
-    z=2,
-)
+camera.fov = 550
 
 app.run()
