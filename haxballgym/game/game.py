@@ -26,6 +26,7 @@ from haxballgym.game.modules import (
     resolve_collisions,
     update_discs,
     PlayerHandler,
+    GameRenderer,
 )
 
 
@@ -48,6 +49,7 @@ class Game:
         self.stadium_store: Stadium = load_stadium_hbs(self.stadium_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recorder = GameActionRecorder(self, self.folder_rec)
+        self.renderer = GameRenderer(self)
 
     def add_player(self, player: PlayerHandler) -> None:
         self.players.append(player)
@@ -67,22 +69,6 @@ class Game:
         self.stadium_file = map_file
         self.stadium_store: Stadium = load_stadium_hbs(map_file)
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
-
-    def step(self, actions: np.ndarray) -> bool:
-        for action, player in zip(actions, self.players):
-            self.make_player_action(player, action)
-
-        previous_discs_position = [
-            copy.deepcopy(disc)
-            for disc in self.stadium_game.discs
-            if disc.collision_group & COLLISION_FLAG_SCORE != 0
-        ]
-        update_discs(self.stadium_game)
-        resolve_collisions(self.stadium_game)
-        done = self.handle_game_state(previous_discs_position)
-        self.recorder.step(actions)
-
-        return done
 
     def check_goal(self, previous_discs_position: List[Disc]) -> int:
         current_disc_position = [
@@ -212,6 +198,24 @@ class Game:
             self.stadium_game.discs.append(player.disc)
         self.reset_discs_positions()
         self.recorder.start()
+        # self.renderer.start()
+
+    def step(self, actions: np.ndarray) -> bool:
+        for action, player in zip(actions, self.players):
+            self.make_player_action(player, action)
+
+        previous_discs_position = [
+            copy.deepcopy(disc)
+            for disc in self.stadium_game.discs
+            if disc.collision_group & COLLISION_FLAG_SCORE != 0
+        ]
+        update_discs(self.stadium_game)
+        resolve_collisions(self.stadium_game)
+        done = self.handle_game_state(previous_discs_position)
+        self.recorder.step(actions)
+        # self.renderer.update()
+
+        return done
 
     def stop(self, save_recording: bool) -> None:
         self.recorder.stop(save=save_recording)

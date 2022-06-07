@@ -8,15 +8,11 @@ from haxballgym.game.common_values import TEAM_BLUE_ID, TEAM_RED_ID
 from haxballgym.game.modules.game.game_score import GameScore
 from haxballgym.game.modules.player.player_handler import PlayerHandler
 
-# Check SDF for creating better curves
-
 game = Game(
-    stadium_file=cv.MAP_FUTSAL_CLASSIC,
+    stadium_file=cv.MAP_PENALTY,
     logging_level=logging.NOTSET,
 )
-
-custom_score = GameScore(time_limit=1, score_limit=1)
-game.score = custom_score
+game.score = GameScore(time_limit=1, score_limit=1)
 
 player_red = PlayerHandler("P0", TEAM_RED_ID)
 player_blue = PlayerHandler("P1", TEAM_BLUE_ID)
@@ -58,6 +54,6 @@ def update():
 
 camera.orthographic = True
 camera.position = Vec2(0, 0)
-camera.fov = 550
+camera.fov = 1000
 
 app.run()

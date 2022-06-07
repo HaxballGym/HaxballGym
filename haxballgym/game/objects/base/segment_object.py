@@ -1,6 +1,7 @@
 from math import pi, tan
 from typing import List
 from ursina import Entity, Pipe
+import pygame
 from haxballgym.game.common_values import COLLISION_FLAG_WALL, COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
 from haxballgym.game.objects.base import Vertex
@@ -175,3 +176,35 @@ class Segment(PhysicsObject):
         )
 
         return line_entity_mesh
+
+    def draw(self, surface, window_size):
+        if self.visible is False:
+            return None
+
+        if self.curve != 0:
+            nb_segments = int(
+                (self.circle_angle[1] - self.circle_angle[0]) / (2 * pi) * 64
+            )
+
+            vertices_draw = self.arc(
+                x=self.circle_center[0] + window_size[0] / 2,
+                y=self.circle_center[1] + window_size[1] / 2,
+                radius=self.circle_radius,
+                start_angle=self.circle_angle[0],
+                end_angle=self.circle_angle[1],
+                segments=nb_segments,
+                clockwise=True,
+            )
+        else:
+            vertices_draw = [
+                (v.position[0] + window_size[0] / 2, v.position[1] + window_size[1] / 2)
+                for v in self.vertices
+            ]
+
+        pygame.draw.lines(
+            surface=surface,
+            color=self.parse_color_entity_pygame(self.color),
+            closed=False,
+            points=vertices_draw,
+            width=4,
+        )
