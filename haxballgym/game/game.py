@@ -198,7 +198,7 @@ class Game:
             self.stadium_game.discs.append(player.disc)
         self.reset_discs_positions()
         self.recorder.start()
-        # self.renderer.start()
+        self.renderer.start()
 
     def step(self, actions: np.ndarray) -> bool:
         for action, player in zip(actions, self.players):
@@ -213,7 +213,7 @@ class Game:
         resolve_collisions(self.stadium_game)
         done = self.handle_game_state(previous_discs_position)
         self.recorder.step(actions)
-        # self.renderer.update()
+        self.renderer.update()
 
         return done
 
@@ -230,6 +230,7 @@ class Game:
         self.team_kickoff = TEAM_RED_ID
         self.stadium_game: Stadium = copy.deepcopy(self.stadium_store)
         self.recorder = GameActionRecorder(self, self.folder_rec)
+        self.renderer.stop()
 
     def reset(self, save_recording: bool) -> None:
         self.stop(save_recording)
