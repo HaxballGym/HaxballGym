@@ -62,11 +62,6 @@ class PhysicsObject(ABC):
         return rgb(r, g, b)
 
     @staticmethod
-    def parse_color_entity_pygame(color: str) -> Color:
-        (r, g, b) = tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))
-        return (r, g, b)
-
-    @staticmethod
     def arc(
         x: float,
         y: float,

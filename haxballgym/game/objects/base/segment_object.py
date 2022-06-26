@@ -1,7 +1,7 @@
 from math import pi, tan
 from typing import List
 from ursina import Entity, Pipe
-import pygame
+
 from haxballgym.game.common_values import COLLISION_FLAG_WALL, COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
 from haxballgym.game.objects.base import Vertex
@@ -200,11 +200,3 @@ class Segment(PhysicsObject):
                 (v.position[0] + window_size[0] / 2, v.position[1] + window_size[1] / 2)
                 for v in self.vertices
             ]
-
-        pygame.draw.lines(
-            surface=surface,
-            color=self.parse_color_entity_pygame(self.color),
-            closed=False,
-            points=vertices_draw,
-            width=4,
-        )

@@ -3,7 +3,6 @@ from haxballgym.game.common_values import COLLISION_FLAG_ALL
 from haxballgym.game.objects.base import PhysicsObject
 
 from ursina import Entity
-import pygame
 
 import numpy as np
 import copy
@@ -83,24 +82,3 @@ class Disc(PhysicsObject):
         )
 
         return disc_entity
-
-    def draw(self, surface: pygame.Surface, window_size: Tuple[int]) -> None:
-        pygame.draw.circle(
-            surface=surface,
-            color=self.parse_color_entity_pygame(self.color),
-            center=(
-                self.position[0] + window_size[0] / 2,
-                self.position[1] + window_size[1] / 2,
-            ),
-            radius=self.radius,
-        )
-        pygame.draw.circle(
-            surface=surface,
-            color=pygame.Color("black"),
-            center=(
-                self.position[0] + window_size[0] / 2,
-                self.position[1] + window_size[1] / 2,
-            ),
-            radius=self.radius + 1,
-            width=2,
-        )
