@@ -1,6 +1,10 @@
-__version__ = "0.3.3"
+__version__ = "0.4.0"
 
 release_notes = {
+    "0.4.0": """
+    - Export the game logic in a different package called ursinaxball.
+    - Definitely fix the stadium issue.
+    """,
     "0.3.3": """
     - Fix setup error that made it so we didn't import the stadiums. Once again.
     """,
