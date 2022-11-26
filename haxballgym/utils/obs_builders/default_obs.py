@@ -4,7 +4,7 @@ from haxballgym.utils.common_values import BLUE_TEAM
 
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.obs_builders import ObsBuilder
-from haxballgym.game.modules import PlayerHandler
+from ursinaxball.modules import PlayerHandler
 
 
 class DefaultObs(ObsBuilder):

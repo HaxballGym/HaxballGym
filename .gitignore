@@ -128,3 +128,6 @@ dmypy.json
 *.hbar
 *.hbpr
 recordings/
+
+# poetry
+poetry.lock

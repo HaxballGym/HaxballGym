@@ -1,7 +1,12 @@
 import haxballgym
 import time
+from ursinaxball import Game
 
-game = haxballgym.game.Game(folder_rec="./recordings/")
+game = Game(
+    folder_rec="./recordings/",
+    enable_renderer=True,
+    enable_vsync=True,
+)
 env = haxballgym.make(game=game)
 
 ep_reward = 0

@@ -3,7 +3,7 @@ from typing import Any, Optional, Tuple, overload, Union
 import numpy as np
 from haxballgym.utils.reward_functions import RewardFunction
 from haxballgym.utils.gamestates import GameState
-from haxballgym.game.modules import PlayerHandler
+from ursinaxball.modules import PlayerHandler
 
 
 class CombinedReward(RewardFunction):

@@ -4,9 +4,9 @@
 
 from typing import List, Optional
 
-from haxballgym.game import Game
-from haxballgym.game.modules import PlayerData, PlayerHandler
-from haxballgym.game.objects.base import Disc
+from ursinaxball import Game
+from ursinaxball.modules import PlayerData, PlayerHandler
+from ursinaxball.objects.base import Disc
 
 
 class GameState(object):

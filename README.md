@@ -2,17 +2,17 @@
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-This is a python package that can be used to treat the game [HaxBall](https://www.haxball.com) as though it were an [OpenAI Gym](https://gym.openai.com)-style environment for Reinforcement Learning projects.
+HaxBallGym is a Python package that can be used to treat the game [HaxBall](https://www.haxball.com) as though it were an [OpenAI Gym](https://gym.openai.com)-style environment for Reinforcement Learning projects.
 
 ## Requirements
 
-- Python >= 3.7
+- Python >= 3.10
 
 ## Installation
 
 Install the library via pip:
 
-```
+```bash
 pip install haxballgym
 ```
 
@@ -20,7 +20,7 @@ That's it! Run `example.py` to see if the installation was successful. The scrip
 
 ## Recordings
 
-To watch the recordings, go to my [HaxBall clone](https://wazarr94.github.io/) and load the recording file.
+To watch recordings, go to my [HaxBall clone](https://wazarr94.github.io/) and load the recording file.
 
 ## Discord
 
