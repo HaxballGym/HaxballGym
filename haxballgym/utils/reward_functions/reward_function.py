@@ -4,7 +4,7 @@ The reward function.
 
 from abc import ABC, abstractmethod
 from haxballgym.utils.gamestates import GameState
-from haxballgym.game.modules import PlayerHandler
+from ursinaxball.modules import PlayerHandler
 import numpy as np
 
 

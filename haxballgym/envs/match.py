@@ -1,11 +1,7 @@
-"""
-The Match object.
-"""
-
 from haxballgym.envs import Environment
 
-from haxballgym.game import Game
-from haxballgym.game.modules import PlayerHandler
+from ursinaxball import Game
+from ursinaxball.modules import PlayerHandler
 
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.action_parsers import ActionParser
