@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 numpy = "^1.23.5"
-gym = "^0.26.2"
+gym = "0.21"
 ursinaxball = "0.1.2"
 
 
