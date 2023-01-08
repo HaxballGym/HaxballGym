@@ -140,7 +140,7 @@ files = [
 ]
 
 [[package]]
-name = "Panda3D"
+name = "panda3d"
 version = "1.10.13"
 description = "Panda3D is a framework for 3D rendering and game development for Python and C++ programs."
 category = "main"
@@ -260,7 +260,7 @@ panda3d = ">=1.10.8"
 test = ["pylint (>=2.4.0,<2.5.0)", "pytest", "pytest-pylint"]
 
 [[package]]
-name = "Pillow"
+name = "pillow"
 version = "9.4.0"
 description = "Python Imaging Library (Fork)"
 category = "main"
@@ -377,14 +377,14 @@ extras = ["imageio", "numpy", "psd-tools3", "psutil"]
 
 [[package]]
 name = "ursinaxball"
-version = "0.1.3"
+version = "0.1.4"
 description = ""
 category = "main"
 optional = false
 python-versions = ">=3.10,<4.0"
 files = [
-    {file = "ursinaxball-0.1.3-py3-none-any.whl", hash = "sha256:606cde748f21cc2fae6f37a3be373902980df0756decc4f866356cc4fdffa984"},
-    {file = "ursinaxball-0.1.3.tar.gz", hash = "sha256:73d0eed4c62188c3dad4f0f84f69055b3eec0e30ba57ef0291d7018aef6e4d3b"},
+    {file = "ursinaxball-0.1.4-py3-none-any.whl", hash = "sha256:e66afb74e1af1c078f6375507755e4062307311483f7b5396a8f908100d1a562"},
+    {file = "ursinaxball-0.1.4.tar.gz", hash = "sha256:9f6c3f3eca14384e65126b1f52bced4fdf62670f657c03f6203963e0f8197c15"},
 ]
 
 [package.dependencies]
@@ -395,4 +395,4 @@ ursina = "5.0.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "ce3b158b9b44941337967a25237bb9472834186833a8985622357bf96b8de7ae"
+content-hash = "4c79da03860bf55883df8ddbd51a4bf2e89a7d9a73decca1b3a21f7720d99a23"
