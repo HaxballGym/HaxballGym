@@ -104,7 +104,7 @@ class Match(Environment):
         return state.red_score - state.blue_score
 
     def parse_actions(self, actions: Any, state: GameState) -> np.ndarray:
-        # Prevent people from accidentally modifying numpy arrays inside the ActionParser
+        # Prevent people from modifying numpy arrays inside the ActionParser
         if isinstance(actions, np.ndarray):
             actions = np.copy(actions)
 

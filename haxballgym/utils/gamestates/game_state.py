@@ -5,7 +5,7 @@
 from typing import List, Optional
 
 from ursinaxball import Game
-from ursinaxball.modules import PlayerData, PlayerHandler
+from ursinaxball.modules import PlayerHandler
 from ursinaxball.objects.base import Disc
 
 

@@ -4,7 +4,7 @@ from haxballgym.utils.reward_functions import RewardFunction
 from haxballgym.utils.gamestates import GameState
 from ursinaxball.modules import PlayerHandler
 from ursinaxball.objects import Stadium
-from ursinaxball.common_values import TEAM_RED_ID, TEAM_BLUE_ID
+from ursinaxball.common_values import TeamID
 
 
 class VelocityPlayerToBallReward(RewardFunction):
@@ -56,11 +56,8 @@ class VelocityBallToGoalReward(RewardFunction):
     def get_reward(
         self, player: PlayerHandler, state: GameState, previous_action: np.ndarray
     ) -> float:
-        if (
-            player.team == TEAM_RED_ID
-            and not self.own_goal
-            or player.team == TEAM_BLUE_ID
-            and self.own_goal
+        if (player.team == TeamID.RED and not self.own_goal) or (
+            player.team == TeamID.BLUE and self.own_goal
         ):
             objective = self.blue_goal
         else:

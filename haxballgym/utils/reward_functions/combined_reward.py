@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple, overload, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 from haxballgym.utils.reward_functions import RewardFunction
