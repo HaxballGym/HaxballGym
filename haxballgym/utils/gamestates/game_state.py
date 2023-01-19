@@ -27,6 +27,9 @@ class GameState(object):
         self.red_score = game_object.score.red
         self.blue_score = game_object.score.blue
 
+        self.players = game_object.players
+        self.ball = game_object.stadium_game.discs[0]
+
         for player in self.players:
             p_data = player.player_data
 

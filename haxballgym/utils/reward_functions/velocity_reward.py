@@ -64,7 +64,7 @@ class VelocityBallToGoalReward(RewardFunction):
             objective = self.red_goal
 
         vel = np.copy(state.ball.velocity)
-        pos_diff = position_diff_point_segment(
+        pos_diff = -position_diff_point_segment(
             state.ball.position, objective.points[0], objective.points[1]
         )
         player_max_speed = (
