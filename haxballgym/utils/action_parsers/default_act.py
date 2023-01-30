@@ -8,11 +8,6 @@ from haxballgym.utils.common_values import NUM_ACTIONS
 
 
 class DefaultAction(DiscreteAction):
-    """
-    Continuous Action space, that also accepts a few other input formats for QoL reasons and to remain
-    compatible with older versions.
-    """
-
     def __init__(self):
         super().__init__()
 
@@ -25,7 +20,6 @@ class DefaultAction(DiscreteAction):
         state: GameState,
     ) -> np.ndarray:
 
-        # allow other data types, this part should not be necessary but is nice to have in the default action parser.
         if type(actions) != np.ndarray:
             actions = np.asarray(actions)
 

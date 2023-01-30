@@ -22,9 +22,10 @@ class Gym(Env):
 
     def reset(self, return_info=False, save_recording=False) -> Union[List, Tuple]:
         """
-        The environment reset function. When called, this will reset the state of the environment and objects in the game.
-        This should be called once when the environment is initialized, then every time the `done` flag from the `step()`
-        function is `True`.
+        The environment reset function.
+        When called, this will reset the state of the environment.
+        This should be called once when the environment is initialized,
+        then every time the `done` flag from the `step()` function is `True`.
         """
 
         self._match.get_reset_state(save_recording)
@@ -41,12 +42,12 @@ class Gym(Env):
 
     def step(self, actions: Any) -> Tuple[List, List, bool, Dict]:
         """
-        The step function will send the list of provided actions to the game, then advance the game forward by `tick_skip`
-        physics ticks using that action. The game is then paused, and the current state is sent back to RLGym. This is
-        decoded into a `GameState` object, which gets passed to the configuration objects to determine the rewards,
-        next observation, and done signal.
+        The step function will send the list of provided actions to the game,
+        then advance the game forward by `tick_skip` physics ticks using that action.
+        We then get the `GameState` object, which gets passed to the configuration
+        objects to determine the rewards, next observation, and done signal.
 
-        :param actions: An object containing actions, in the format specified by the `ActionParser`.
+        :param actions: An object containing actions, in the correct format
         :return: A tuple containing (obs, rewards, done, info)
         """
 

@@ -7,7 +7,8 @@ from haxballgym.utils.common_values import NUM_ACTIONS
 
 class DiscreteAction(ActionParser):
     """
-    Simple discrete action space. All the analog actions have 3 bins by default: -1, 0 and 1.
+    Simple discrete action space.
+    All the analog actions have 3 bins by default: -1, 0 and 1.
     Mapping of the actions is as follows:
     - Left/Right: 1 for right, 0 for nothing, -1 for left
     - Up/Down: 1 for up, 0 for nothing, -1 for down

@@ -11,7 +11,7 @@ class EventReward(RewardFunction):
     def __init__(self, team_goal=0.0, team_concede=-0.0, touch=0.0, kick=0.0):
         """
         :param team_goal: reward for goal scored by player's team.
-        :param team_concede: reward for goal scored by opponents. Should be negative if used as punishment.
+        :param team_concede: reward for goal scored by opponents.
         :param touch: reward for touching the ball.
         :param kick: reward for kicking the ball.
         """
@@ -38,7 +38,6 @@ class EventReward(RewardFunction):
         )
 
     def reset(self, initial_state: GameState, optional_data=None):
-        # Update every reset since rocket league may crash and be restarted with clean values
         self.last_registered_values = {}
         for player in initial_state.players:
             self.last_registered_values[player.id] = self._extract_values(
