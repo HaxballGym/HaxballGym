@@ -36,6 +36,7 @@ class Match(Environment):
         self._action_parser = action_parser
         self._game = game
         self._game_state = GameState(game_object=game)
+        self._bots = bots
 
         if type(terminal_conditions) not in (tuple, list):
             self._terminal_conditions = [
@@ -49,7 +50,8 @@ class Match(Environment):
         self.action_space = self._action_parser.get_action_space()
 
         self._prev_actions = np.zeros(
-            (self.agents, common_values.NUM_ACTIONS), dtype=float
+            (self.agents, common_values.NUM_ACTIONS),
+            dtype=float,
         )
 
     def episode_reset(self, initial_state: GameState):
@@ -61,22 +63,21 @@ class Match(Environment):
 
     def build_observations(self, state: GameState) -> Union[Any, List]:
         observations = []
-        for i in range(len(state.players)):
-            player = state.players[i]
+        for i, player in enumerate(state.players):
+            if player.bot is not None:
+                continue
             obs = self._obs_builder.build_obs(player, state, self._prev_actions[i])
 
             observations.append(obs)
-
-        if len(observations) == 1:
-            return observations[0]
 
         return observations
 
     def get_rewards(self, state: GameState, done: bool) -> Union[float, List]:
         rewards = []
 
-        for i in range(len(state.players)):
-            player = state.players[i]
+        for i, player in enumerate(state.players):
+            if player.bot is not None:
+                continue
 
             if done:
                 reward = self._reward_fn.get_final_reward(
@@ -111,7 +112,7 @@ class Match(Environment):
         actions_parsed = self._action_parser.parse_actions(actions, state)
 
         for action, player in zip(actions_parsed, self._game_state.players):
-            if player.team == common_values.BLUE_TEAM:
+            if player.team == common_values.BLUE_TEAM and player.bot is None:
                 action[0] = action[0] * -1
 
         return actions_parsed
