@@ -1,24 +1,21 @@
 from typing import List
 
-from haxballgym.envs import Match
-from ursinaxball.modules import GameScore
-
-from haxballgym.utils.terminal_conditions import TerminalCondition, common_conditions
-from haxballgym.utils.reward_functions import RewardFunction, common_rewards
-from haxballgym.utils.obs_builders import DefaultObs, ObsBuilder
-from haxballgym.utils.action_parsers import DefaultAction, ActionParser
-
 from ursinaxball import Game, common_values
-from ursinaxball.modules import PlayerHandler
+from ursinaxball.modules import Bot, GameScore, PlayerHandler
 
+from haxballgym.envs import Match
 from haxballgym.gym import Gym
-from haxballgym.version import print_current_release_notes
+from haxballgym.utils.action_parsers import ActionParser, DefaultAction
+from haxballgym.utils.obs_builders import DefaultObs, ObsBuilder
+from haxballgym.utils.reward_functions import RewardFunction, common_rewards
+from haxballgym.utils.terminal_conditions import TerminalCondition, common_conditions
 
 
 def make(
     game: Game = Game(),
     tick_skip: int = 15,
     team_size: int = 1,
+    bots: list[Bot] | None = None,
     terminal_conditions: List[TerminalCondition] = (
         common_conditions.TimeoutCondition(1 * 60 * 60 / 15),
         common_conditions.GoalScoredCondition(),
@@ -45,15 +42,20 @@ def make(
     players_red = [
         PlayerHandler(f"P{i}", common_values.TeamID.RED) for i in range(team_size)
     ]
-    players_blue = [
-        PlayerHandler(f"P{team_size + i}", common_values.TeamID.BLUE)
-        for i in range(team_size)
-    ]
+    if bots is None:
+        players_blue = [
+            PlayerHandler(f"P{team_size + i}", common_values.TeamID.BLUE)
+            for i in range(team_size)
+        ]
+    else:
+        players_blue = [
+            PlayerHandler(f"P{team_size + i}", common_values.TeamID.BLUE, bot=bot)
+            for i, bot in enumerate(bots)
+        ]
+
     players = players_red + players_blue
 
     game.add_players(players)
-
-    print_current_release_notes()
 
     match = Match(
         game=game,
@@ -63,6 +65,7 @@ def make(
         action_parser=action_parser,
         team_size=team_size,
         tick_skip=tick_skip,
+        bots=bots,
     )
 
     return Gym(match)

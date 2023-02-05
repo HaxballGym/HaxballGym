@@ -1,7 +1,7 @@
 from haxballgym.envs import Environment
 
 from ursinaxball import Game
-from ursinaxball.modules import PlayerHandler
+from ursinaxball.modules import PlayerHandler, Bot
 
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.action_parsers import ActionParser
@@ -23,8 +23,9 @@ class Match(Environment):
         terminal_conditions: TerminalCondition,
         obs_builder: ObsBuilder,
         action_parser: ActionParser,
-        team_size=1,
-        tick_skip=15,
+        team_size: int = 1,
+        bots: list[Bot] | None = None,
+        tick_skip: int = 15,
     ):
         super().__init__()
 
@@ -42,7 +43,7 @@ class Match(Environment):
                 terminal_conditions,
             ]
 
-        self.agents = self._team_size * 2
+        self.agents = self._team_size * 2 if bots is None else self._team_size
 
         self.observation_space = None
         self._auto_detect_obs_space()
