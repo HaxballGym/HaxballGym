@@ -1,8 +1,9 @@
-import numpy as np
 import gym.spaces
-from haxballgym.utils.gamestates import GameState
+import numpy as np
+
 from haxballgym.utils.action_parsers import ActionParser
 from haxballgym.utils.common_values import NUM_ACTIONS
+from haxballgym.utils.gamestates import GameState
 
 
 class DiscreteAction(ActionParser):

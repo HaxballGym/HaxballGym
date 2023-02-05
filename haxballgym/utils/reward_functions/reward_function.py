@@ -3,9 +3,11 @@ The reward function.
 """
 
 from abc import ABC, abstractmethod
-from haxballgym.utils.gamestates import GameState
-from ursinaxball.modules import PlayerHandler
+
 import numpy as np
+from ursinaxball.modules import PlayerHandler
+
+from haxballgym.utils.gamestates import GameState
 
 
 class RewardFunction(ABC):

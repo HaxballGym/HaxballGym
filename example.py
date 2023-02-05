@@ -1,6 +1,8 @@
-import haxballgym
 import time
+
 from ursinaxball import Game
+
+import haxballgym
 
 game = Game(
     folder_rec="./recordings/",

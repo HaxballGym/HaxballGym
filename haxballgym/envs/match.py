@@ -1,18 +1,17 @@
-from haxballgym.envs import Environment
-
-from ursinaxball import Game
-from ursinaxball.modules import PlayerHandler, Bot
-
-from haxballgym.utils.gamestates import GameState
-from haxballgym.utils.action_parsers import ActionParser
-from haxballgym.utils.obs_builders import ObsBuilder
-from haxballgym.utils.reward_functions import RewardFunction
-from haxballgym.utils.terminal_conditions import TerminalCondition
-from haxballgym.utils import common_values
+from typing import Any, List, Union
 
 import gym.spaces
 import numpy as np
-from typing import List, Union, Any
+from ursinaxball import Game
+from ursinaxball.modules import Bot, PlayerHandler
+
+from haxballgym.envs import Environment
+from haxballgym.utils import common_values
+from haxballgym.utils.action_parsers import ActionParser
+from haxballgym.utils.gamestates import GameState
+from haxballgym.utils.obs_builders import ObsBuilder
+from haxballgym.utils.reward_functions import RewardFunction
+from haxballgym.utils.terminal_conditions import TerminalCondition
 
 
 class Match(Environment):

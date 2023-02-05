@@ -2,12 +2,13 @@
     The HaxBall gym environment.
 """
 
-from typing import List, Union, Tuple, Dict, Any
-from haxballgym.envs.match import Match
-from haxballgym.utils.common_values import NUM_ACTIONS
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 from gym import Env
+
+from haxballgym.envs.match import Match
+from haxballgym.utils.common_values import NUM_ACTIONS
 
 
 class Gym(Env):

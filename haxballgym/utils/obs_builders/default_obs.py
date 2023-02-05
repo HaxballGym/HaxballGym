@@ -1,10 +1,11 @@
-import numpy as np
 from typing import Any, List
-from haxballgym.utils.common_values import BLUE_TEAM
 
+import numpy as np
+from ursinaxball.modules import PlayerHandler
+
+from haxballgym.utils.common_values import BLUE_TEAM
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.obs_builders import ObsBuilder
-from ursinaxball.modules import PlayerHandler
 
 
 class DefaultObs(ObsBuilder):

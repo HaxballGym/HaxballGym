@@ -2,8 +2,8 @@
 A module containing implementations of common terminal conditions.
 """
 
-from haxballgym.utils.terminal_conditions import TerminalCondition
 from haxballgym.utils.gamestates import GameState
+from haxballgym.utils.terminal_conditions import TerminalCondition
 
 
 class TimeoutCondition(TerminalCondition):

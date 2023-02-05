@@ -1,10 +1,11 @@
-import numpy as np
-import gym.spaces
-from typing import Union, List
+from typing import List, Union
 
-from haxballgym.utils.gamestates import GameState
+import gym.spaces
+import numpy as np
+
 from haxballgym.utils.action_parsers import DiscreteAction
 from haxballgym.utils.common_values import NUM_ACTIONS
+from haxballgym.utils.gamestates import GameState
 
 
 class DefaultAction(DiscreteAction):

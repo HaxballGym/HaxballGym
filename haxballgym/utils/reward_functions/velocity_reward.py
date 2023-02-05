@@ -1,10 +1,10 @@
 import numpy as np
-
-from haxballgym.utils.reward_functions import RewardFunction
-from haxballgym.utils.gamestates import GameState
+from ursinaxball.common_values import TeamID
 from ursinaxball.modules import PlayerHandler
 from ursinaxball.objects import Stadium
-from ursinaxball.common_values import TeamID
+
+from haxballgym.utils.gamestates import GameState
+from haxballgym.utils.reward_functions import RewardFunction
 
 
 class VelocityPlayerToBallReward(RewardFunction):

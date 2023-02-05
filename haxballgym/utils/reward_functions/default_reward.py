@@ -1,7 +1,8 @@
-from haxballgym.utils.reward_functions import RewardFunction
-from haxballgym.utils.gamestates import GameState
-from ursinaxball.modules import PlayerHandler
 import numpy as np
+from ursinaxball.modules import PlayerHandler
+
+from haxballgym.utils.gamestates import GameState
+from haxballgym.utils.reward_functions import RewardFunction
 
 
 # THIS REWARD IS FOR DEMONSTRATION PURPOSES ONLY, DO NOT USE IT

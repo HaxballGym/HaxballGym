@@ -3,6 +3,7 @@ A terminal condition.
 """
 
 from abc import ABC, abstractmethod
+
 from haxballgym.utils.gamestates import GameState
 
 

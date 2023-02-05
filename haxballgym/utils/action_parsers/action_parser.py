@@ -3,10 +3,12 @@ The action parser.
 """
 
 from abc import ABC, abstractmethod
-from haxballgym.utils.gamestates import GameState
+from typing import Any
+
 import gym.spaces
 import numpy as np
-from typing import Any
+
+from haxballgym.utils.gamestates import GameState
 
 
 class ActionParser(ABC):

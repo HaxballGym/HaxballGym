@@ -1,10 +1,10 @@
 from abc import abstractmethod
 
 import numpy as np
+from ursinaxball.modules import PlayerHandler
 
 from haxballgym.utils import RewardFunction
 from haxballgym.utils.gamestates import GameState
-from ursinaxball.modules import PlayerHandler
 
 
 class ConditionalRewardFunction(RewardFunction):

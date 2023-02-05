@@ -1,9 +1,10 @@
 from typing import Optional, Tuple, Union
 
 import numpy as np
-from haxballgym.utils.reward_functions import RewardFunction
-from haxballgym.utils.gamestates import GameState
 from ursinaxball.modules import PlayerHandler
+
+from haxballgym.utils.gamestates import GameState
+from haxballgym.utils.reward_functions import RewardFunction
 
 
 class CombinedReward(RewardFunction):

@@ -1,8 +1,8 @@
 import numpy as np
-
-from ursinaxball.objects import Stadium
-from ursinaxball.modules.player import PlayerHandler
 from ursinaxball.common_values import TeamID
+from ursinaxball.modules.player import PlayerHandler
+from ursinaxball.objects import Stadium
+
 from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.reward_functions import RewardFunction
 
