@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "haxballgym"
-version = "0.5.3"
+version = "0.5.4"
 description = "HaxBallGym is a python package that can be used to treat the game HaxBall as though it were an OpenAI-style environment for Reinforcement Learning projects."
 authors = ["Wazarr <jeje_04@live.com>"]
 readme = "README.md"
