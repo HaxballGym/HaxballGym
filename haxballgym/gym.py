@@ -80,7 +80,7 @@ class Gym(Env):
             actions.shape[-1] == NUM_ACTIONS
         ), f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
 
-        for _ in range(self._match._tick_skip):
+        for _ in range(self._match._tick_skip + 1):
             self._match._game.step(actions)
 
         return True
