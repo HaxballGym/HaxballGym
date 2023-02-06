@@ -139,7 +139,7 @@ class Match(Environment):
 
         empty_game = Game()
         empty_game_state = GameState(game_object=empty_game)
-        empty_player_list = [PlayerHandler("") for _ in range(self._team_size * 2)]
+        empty_player_list = [PlayerHandler("") for _ in self._game.players]
         prev_inputs = np.zeros(common_values.NUM_ACTIONS)
 
         empty_game_state.players = empty_player_list
