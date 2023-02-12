@@ -107,7 +107,9 @@ class Match(Environment):
     def get_result(self, state: GameState) -> int:
         return state.red_score - state.blue_score
 
-    def parse_actions(self, actions: Any, state: GameState) -> np.ndarray:
+    def parse_actions(
+        self, actions: list[int] | np.ndarray, state: GameState
+    ) -> np.ndarray:
         # Prevent people from modifying numpy arrays inside the ActionParser
         if isinstance(actions, np.ndarray):
             actions = np.copy(actions)
@@ -120,26 +122,13 @@ class Match(Environment):
 
         return actions_parsed
 
-    def format_actions(self, actions: np.ndarray):
-        self._prev_actions[:] = actions[:]
-
-        acts = []
-        for i in range(len(actions)):
-            acts.append(float(self._game.players[i].id))
-            for act in actions[i]:
-                acts.append(float(act))
-
-        return acts
-
-    def get_reset_state(self, save_recording=False) -> bool:
+    def get_reset_state(self, save_recording=False):
         self._game.reset(save_recording)
-        return True
 
     def get_config(self):
         return [self._team_size, self._tick_skip]
 
     def _auto_detect_obs_space(self):
-
         empty_game = Game()
         empty_game_state = GameState(game_object=empty_game)
         empty_player_list = [PlayerHandler("") for _ in self._game.players]

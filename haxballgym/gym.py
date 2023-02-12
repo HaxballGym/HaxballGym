@@ -2,13 +2,12 @@
     The HaxBall gym environment.
 """
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 from gym import Env
 
 from haxballgym.envs.match import Match
-from haxballgym.utils.common_values import NUM_ACTIONS
 
 
 class Gym(Env):
@@ -30,7 +29,6 @@ class Gym(Env):
         """
 
         self._match.get_reset_state(save_recording)
-
         state = self._receive_state()
         self._match.episode_reset(state)
         self._prev_state = state
@@ -41,7 +39,7 @@ class Gym(Env):
             return obs, info
         return obs
 
-    def step(self, actions: Any) -> Tuple[List, List, bool, Dict]:
+    def step(self, actions: list[int] | np.ndarray) -> Tuple[List, List, bool, Dict]:
         """
         The step function will send the list of provided actions to the game,
         then advance the game forward by `tick_skip` physics ticks using that action.
@@ -51,11 +49,13 @@ class Gym(Env):
         :param actions: An object containing actions, in the correct format
         :return: A tuple containing (obs, rewards, done, info)
         """
-
         actions = self._match.parse_actions(actions, self._prev_state)
-        self._send_actions(actions)
-        state = self._receive_state()
+        actions_all = self._get_all_actions(actions)
 
+        for _ in range(self._match._tick_skip + 1):
+            self._match._game.step(actions_all)
+
+        state = self._receive_state()
         obs = self._match.build_observations(state)
         done = self._match.is_done(state)
         reward = self._match.get_rewards(state, done)
@@ -69,18 +69,16 @@ class Gym(Env):
         self._match._game_state.update(self._match._game)
         return self._match._game_state
 
-    def _send_actions(self, actions):
-        assert isinstance(
-            actions, np.ndarray
-        ), f"Invalid action type, action must be of type np.ndarray(n, {NUM_ACTIONS})."
-        assert (
-            len(actions.shape) == 2
-        ), f"Invalid action shape, shape must be of the form (n, {NUM_ACTIONS})."
-        assert (
-            actions.shape[-1] == NUM_ACTIONS
-        ), f"Invalid action shape, last dimension must be {NUM_ACTIONS}."
+    def _get_all_actions(self, actions: list[int] | np.ndarray):
+        if self._match._bots is None:
+            return actions
 
-        for _ in range(self._match._tick_skip + 1):
-            self._match._game.step(actions)
+        actions_all = [p.step(self._match._game) for p in self._match._game.players]
 
-        return True
+        i = 0
+        for j, act in enumerate(actions_all):
+            if act is None:
+                actions_all[j] = actions[i]
+                i += 1
+
+        return actions_all

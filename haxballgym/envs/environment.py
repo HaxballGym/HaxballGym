@@ -32,7 +32,3 @@ class Environment:
     @abstractmethod
     def parse_state(self, state_string):
         raise NotImplementedError
-
-    @abstractmethod
-    def format_actions(self, actions):
-        raise NotImplementedError
