@@ -12,6 +12,7 @@ from haxballgym.utils.gamestates import GameState
 from haxballgym.utils.obs_builders import ObsBuilder
 from haxballgym.utils.reward_functions import RewardFunction
 from haxballgym.utils.terminal_conditions import TerminalCondition
+from haxballgym.utils.state_setters import StateSetter
 
 
 class Match(Environment):
@@ -22,6 +23,7 @@ class Match(Environment):
         terminal_conditions: TerminalCondition,
         obs_builder: ObsBuilder,
         action_parser: ActionParser,
+        state_setter: StateSetter,
         team_size: int = 1,
         bots: list[Bot] | None = None,
         tick_skip: int = 15,
@@ -36,6 +38,7 @@ class Match(Environment):
         self._action_parser = action_parser
         self._game = game
         self._game_state = GameState(game_object=game)
+        self._state_setter = state_setter
         self._bots = bots
 
         if type(terminal_conditions) not in (tuple, list):
@@ -123,7 +126,7 @@ class Match(Environment):
         return actions_parsed
 
     def get_reset_state(self, save_recording=False):
-        self._game.reset(save_recording)
+        self._state_setter.reset(self._game, save_recording)
 
     def get_config(self):
         return [self._team_size, self._tick_skip]

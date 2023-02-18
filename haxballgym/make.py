@@ -9,6 +9,7 @@ from haxballgym.utils.action_parsers import ActionParser, DefaultAction
 from haxballgym.utils.obs_builders import DefaultObs, ObsBuilder
 from haxballgym.utils.reward_functions import RewardFunction, common_rewards
 from haxballgym.utils.terminal_conditions import TerminalCondition, common_conditions
+from haxballgym.utils.state_setters import StateSetter, DefaultState
 
 
 def make(
@@ -25,6 +26,7 @@ def make(
     ),
     obs_builder: ObsBuilder = DefaultObs(),
     action_parser: ActionParser = DefaultAction(),
+    state_setter: StateSetter = DefaultState(),
 ):
     """
     :param tick_skip: The amount of physics ticks your action will be repeated for
@@ -63,6 +65,7 @@ def make(
         terminal_conditions=terminal_conditions,
         obs_builder=obs_builder,
         action_parser=action_parser,
+        state_setter=state_setter,
         team_size=team_size,
         tick_skip=tick_skip,
         bots=bots,
