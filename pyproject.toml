@@ -1,15 +1,15 @@
 [tool.poetry]
 name = "haxballgym"
-version = "0.5.6"
+version = "0.5.7"
 description = "HaxBallGym is a python package that can be used to treat the game HaxBall as though it were an OpenAI-style environment for Reinforcement Learning projects."
 authors = ["Wazarr <jeje_04@live.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.10,<3.11"
 numpy = "^1.23.5"
-gym = "0.21.0"
 ursinaxball = "0.2.3"
+gym = "^0.26.2"
 
 
 [build-system]
