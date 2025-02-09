@@ -1,0 +1,125 @@
+---
+description: Codebase instructions
+globs: *.py
+---
+# Codebase instructions
+
+This document outlines the coding standards for the Ursinaxball game engine library.
+
+## Development Environment
+
+1. Package Management:
+   - Use `poetry` for dependency management
+   - Keep dependencies up to date
+   - Use `pyproject.toml` for project configuration
+   - Maintain Python version compatibility (>=3.9, <3.13)
+
+2. Code Quality Tools:
+   - Use `ruff` for linting and formatting
+   - All code must pass with 0 warnings
+   - Run `ruff check .` and `ruff format .` before committing
+
+## General
+
+1. Follow PEP 8 with the following specific requirements:
+   - Use 4 spaces for indentation
+   - Maximum line length is 88 characters (Black default)
+   - Use double quotes for docstrings and string literals
+
+2. File Organization:
+   - Module-level docstring at the top explaining the module's purpose
+   - Imports grouped and ordered:
+     1. Standard library imports (alphabetically sorted)
+     2. Third-party imports (Ursina, Panda3D, numpy, etc.)
+     3. Local application imports (from ursinaxball.*)
+   - One blank line between import groups
+   - No unused imports
+   - No relative imports (use absolute imports)
+
+3. Game Engine Specific:
+   - Use Ursina engine conventions for game objects and entities
+   - Keep physics calculations in dedicated modules
+   - Separate game logic from rendering logic
+   - Use proper type hints for vectors and game objects
+
+## Performance and Type Hints
+
+1. Performance Requirements:
+   - Use `numpy` arrays for all performance-critical calculations
+   - Avoid Python loops when vector/matrix operations can be used
+   - Leverage numpy's vectorized operations whenever possible
+   - Profile and optimize numpy operations in critical paths
+
+2. Type Hints:
+   - Import annotations from future: `from __future__ import annotations`
+   - Use built-in collection types directly (e.g., `dict`, `list`, `set`)
+   - Never import `Dict`, `List`, etc. from typing
+   - Use type hints for all function parameters and return values
+
+## Logging
+
+1. Logging Standards:
+   - Use `loguru` exclusively for all logging
+   - Never use print statements or other logging libraries
+   - Structured logging with appropriate context
+   - Use appropriate log levels (debug, info, warning, error, critical)
+
+## Object Creation
+
+1. Object Initialization Order:
+   - First apply direct keys from stadium configuration
+   - Then apply trait modifications
+   - Finally apply default values
+   - This order must be strictly followed for consistency
+
+## Classes
+
+1. Class Structure:
+   - Class-level docstring describing the class purpose and game-related behavior
+   - Class attributes (if any)
+   - `__init__` method with proper initialization of game components
+   - Update methods (if entity needs per-frame updates)
+   - Public methods
+   - Private methods (prefixed with `_`)
+
+2. Game Components:
+   - Separate concerns between physics, rendering, and game logic
+   - Use composition over inheritance for game objects
+   - Implement proper cleanup in `on_destroy` methods
+   - Handle game state changes explicitly
+
+## Performance Considerations
+
+1. Game Loop Optimization:
+   - Minimize operations in update loops
+   - Use efficient data structures for collision detection
+   - Cache frequently accessed values
+   - Profile performance-critical sections
+
+2. Memory Management:
+   - Clean up game objects properly
+   - Use object pooling for frequently created/destroyed objects
+   - Monitor memory usage in long game sessions
+   - Implement proper cleanup for game recordings
+
+## Error Handling
+
+1. Game-Specific Error Handling:
+   - Handle physics edge cases gracefully
+   - Provide meaningful error messages for game state issues
+   - Log errors with appropriate context
+   - Implement graceful fallbacks for rendering issues
+
+## Testing
+
+1. Test Structure:
+   - Use pytest for all tests
+   - Group tests by game components (physics, scoring, player movement)
+   - Use fixtures for common game setups
+   - Test both success and failure scenarios
+
+2. Game-Specific Testing:
+   - Test physics calculations
+   - Verify game rules and scoring
+   - Test bot behavior
+   - Validate replay functionality

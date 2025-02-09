@@ -6,10 +6,10 @@ authors = ["Wazarr <jeje_04@live.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-numpy = "^1.23.5"
-ursinaxball = "0.2.3"
+python = ">=3.9,<3.13"
+ursinaxball = { git = "https://github.com/HaxballGym/Ursinaxball" }
 gym = "^0.26.2"
+numpy = ">=1.0,<2.0"
 
 
 [build-system]
