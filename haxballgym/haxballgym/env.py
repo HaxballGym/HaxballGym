@@ -21,6 +21,7 @@ from .reward import (
     VelocityBallToGoal,
     VelocityPlayerToBall,
 )
+from .state import RED
 
 
 class Env:
@@ -42,6 +43,9 @@ class Env:
         self.truncation_cond = truncation_cond
         self.state_mutator = state_mutator
         self.prev_state = None
+        # DefaultObs mirrors the x-axis for blue (so both sides see "attacking +x");
+        # undo that mirror on the action's dx so blue moves the right way in the world.
+        self._mirror_x = np.where(engine._teams == RED, 1, -1)  # (N, P): +1 red, -1 blue
 
     # --- spaces / shapes ---
     @property
@@ -76,6 +80,7 @@ class Env:
 
     def step(self, actions: np.ndarray):
         engine_actions = self.action_parser.parse_actions(actions)
+        engine_actions[..., 0] *= self._mirror_x  # un-mirror dx for blue
         state = self.engine.step(engine_actions)
 
         terminated = self.termination_cond.is_done(state)  # (N,)

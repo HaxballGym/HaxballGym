@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from .state import GameState
+from .state import RED, GameState
 
 
 class ObsBuilder(ABC):
@@ -21,11 +21,11 @@ class ObsBuilder(ABC):
 
 
 class DefaultObs(ObsBuilder):
-    """Goal-relative, side-aware obs — one shared policy plays red and blue with no
-    per-team mirroring. Per player: [self_pos, self_vel, ball_rel, ball_vel,
-    target_goal_rel, own_goal_rel] (=12) + [rel_pos, vel] per other player (=4 each).
-
-    Exactly reproduces the old baked-in `VecEnv.build_obs` (coefs from `lib.rs`).
+    """Goal-relative, fully side-symmetric obs. The x-axis is mirrored for blue so
+    BOTH teams see themselves attacking +x — one network then plays both sides
+    identically (the action's dx is mirrored back in Env.step). Per player:
+    [self_pos, self_vel, ball_rel, ball_vel, target_goal_rel, own_goal_rel] (=12)
+    + [rel_pos, vel] per other player (=4 each).
     """
 
     def __init__(self, pos_coef=(1.0 / 420.0, 1.0 / 200.0), vel_coef=1.0 / 10.0):
@@ -63,4 +63,9 @@ class DefaultObs(ObsBuilder):
                 out[:, k, slot : slot + 2] = (ppos[:, j] - ppos[:, k]) * pc
                 out[:, k, slot + 2 : slot + 4] = pvel[:, j] * vc
                 slot += 4
+
+        # Mirror the x-axis for blue so both teams see an "attacking +x" frame
+        # (every 2-vector's x component is at an even index).
+        sx = np.where(state.team == RED, 1.0, -1.0)[:, :, None]  # (N, P, 1)
+        out[:, :, 0::2] *= sx
         return out
