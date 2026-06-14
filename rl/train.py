@@ -62,7 +62,13 @@ class Settings(BaseSettings):
     # run / compute
     iters: int = 250
     dev: str = "cpu"  # "cpu" | "mps" | "cuda"
-    jiggle: float = 0.30  # chase-bot angular jiggle
+    jiggle: float = 0.30  # chase-bot angular jiggle (eval opponent only)
+
+    # self-play
+    selfplay: str = "direct"  # "direct" = both players are the current net (both train);
+    #                           "snapshot" = learner vs a frozen past snapshot from a pool
+    pool_size: int = 20  # snapshot mode: how many past snapshots to keep
+    snapshot_every: int = 10  # snapshot mode: add the current net to the pool every N iters
 
     # live experiment tracking
     tb: bool = True  # TensorBoard (local, no account)
@@ -133,6 +139,9 @@ TICK_SKIP = 8
 T = 64
 TOTAL_ITERS = settings.iters
 CHASE_JIGGLE = settings.jiggle
+SELFPLAY = settings.selfplay
+POOL_SIZE = settings.pool_size
+SNAPSHOT_EVERY = settings.snapshot_every
 HALF_LIFE_S = 5.0
 FPS = 60 / TICK_SKIP
 GAMMA = math.exp(math.log(0.5) / (FPS * HALF_LIFE_S))
@@ -229,38 +238,40 @@ def evaluate_vs(model, opponent="chase", n_envs=256, steps=400, seed=123, jiggle
 def main():
     env = make_env(N_ENVS)
     obs_dim = env.obs_dim
-    B = N_ENVS  # one learner per env
+    # Players are flattened to 2N slots (env*2 + player). Two self-play modes:
+    #   "direct":   every slot is the current net and trains       -> B = 2N
+    #   "snapshot": one slot/env is the learner; the other is a frozen past snapshot
+    #               sampled from a pool. Only learner slots train   -> B = N
+    snapshot_mode = SELFPLAY == "snapshot"
+    if snapshot_mode:
+        learner_side = np.zeros(N_ENVS, dtype=np.int64)
+        learner_side[N_ENVS // 2 :] = 1  # learner red in half the envs, blue in the rest
+        learner_pos = np.arange(N_ENVS) * 2 + learner_side
+        opp_pos = np.arange(N_ENVS) * 2 + (1 - learner_side)
+        opp_pos_t = torch.as_tensor(opp_pos, device=DEVICE)
+        opp_model = Policy(obs_dim).to(DEVICE)
+        pool = []  # past snapshots (CPU state_dicts)
+        B = N_ENVS
+    else:
+        learner_pos = np.arange(2 * N_ENVS)
+        B = 2 * N_ENVS
+    learner_pos_t = torch.as_tensor(learner_pos, device=DEVICE)
+
     logger.info(
-        "device={} obs_dim={} B={} gamma={:.4f} jiggle={} iters={}",
-        DEVICE,
-        obs_dim,
-        B,
-        GAMMA,
-        CHASE_JIGGLE,
-        TOTAL_ITERS,
+        "self-play[{}] | device={} obs_dim={} train_slots={} gamma={:.4f} iters={}",
+        SELFPLAY, DEVICE, obs_dim, B, GAMMA, TOTAL_ITERS,
     )
     log, close_log = make_logger()
-    log(
-        0,
-        **{
-            "hparams/gamma": GAMMA,
-            "hparams/lr": LR,
-            "hparams/n_envs": N_ENVS,
-            "hparams/tick_skip": TICK_SKIP,
-            "hparams/jiggle": CHASE_JIGGLE,
-        },
-    )
-
-    # learner side: RED (idx 0) in first half of envs, BLUE (idx 1) in the rest
-    learner_idx = np.zeros(N_ENVS, dtype=np.int64)
-    learner_idx[N_ENVS // 2 :] = 1
-    rows = np.arange(N_ENVS)
-    opp_idx = 1 - learner_idx
+    log(0, **{"hparams/gamma": GAMMA, "hparams/lr": LR, "hparams/n_envs": N_ENVS,
+              "hparams/tick_skip": TICK_SKIP})
 
     model = Policy(obs_dim).to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
-    obs = env.reset()  # (N, 2, obs_dim)
-    chase_rng = np.random.default_rng(2024)
+    obs = env.reset().reshape(2 * N_ENVS, obs_dim)  # all 2N players, flattened
+    sp_rng = np.random.default_rng(2024)
+
+    def snapshot():
+        return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     S_obs = torch.zeros(T, B, obs_dim, device=DEVICE)
     S_bins = torch.zeros(T, B, 3, dtype=torch.long, device=DEVICE)
@@ -273,26 +284,38 @@ def main():
     t0 = time.perf_counter()
     total = 0
     for it in range(1, TOTAL_ITERS + 1):
+        if snapshot_mode:  # sample this iteration's frozen opponent from the pool
+            opp_model.load_state_dict(pool[sp_rng.integers(len(pool))] if pool else snapshot())
+
         for t in range(T):
-            lo = torch.as_tensor(obs[rows, learner_idx], dtype=torch.float32, device=DEVICE)
+            o = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)  # (2N, od)
             with torch.no_grad():
-                bins, logp, val = model.act(lo)
-            S_obs[t] = lo
+                bins, logp, val = model.act(o[learner_pos_t])
+            S_obs[t] = o[learner_pos_t]
             S_bins[t] = bins
             S_logp[t] = logp
             S_val[t] = val
 
-            chase = chase_bins(obs[rows, opp_idx], chase_rng, jiggle=CHASE_JIGGLE)
-            full = np.empty((N_ENVS, 2, 3), dtype=np.int64)
-            full[rows, learner_idx] = bins.cpu().numpy()
-            full[rows, opp_idx] = chase
-            obs, rew, term, trunc = env.step(full)
-            S_rew[t] = torch.as_tensor(rew[rows, learner_idx], device=DEVICE)
-            S_done[t] = torch.as_tensor((term | trunc).astype(np.float32), device=DEVICE)
-            total += N_ENVS
+            acts = np.empty((2 * N_ENVS, 3), dtype=np.int64)
+            acts[learner_pos] = bins.cpu().numpy()
+            if snapshot_mode:
+                with torch.no_grad():
+                    acts[opp_pos] = opp_model.act(o[opp_pos_t])[0].cpu().numpy()
+
+            nobs, rew, term, trunc = env.step(acts.reshape(N_ENVS, 2, 3))
+            obs = nobs.reshape(2 * N_ENVS, obs_dim)
+            done = np.repeat((term | trunc).astype(np.float32), 2)  # (2N,) both end together
+            S_rew[t] = torch.as_tensor(rew.reshape(2 * N_ENVS)[learner_pos], device=DEVICE)
+            S_done[t] = torch.as_tensor(done[learner_pos], device=DEVICE)
+            total += B
+
+        if snapshot_mode and it % SNAPSHOT_EVERY == 0:  # grow the opponent pool
+            pool.append(snapshot())
+            if len(pool) > POOL_SIZE:
+                pool.pop(0)
 
         with torch.no_grad():
-            last_val = model(torch.as_tensor(obs[rows, learner_idx], dtype=torch.float32, device=DEVICE))[3]
+            last_val = model(torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)[learner_pos_t])[3]
         adv = torch.zeros(T, B, device=DEVICE)
         lastgae = torch.zeros(B, device=DEVICE)
         for t in reversed(range(T)):
