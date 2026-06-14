@@ -1,0 +1,21 @@
+[package]
+name = "haxball_core"
+version = "0.1.0"
+edition = "2021"
+description = "Headless, vectorized Haxball physics core (RocketSim-equivalent for Haxball)."
+
+[lib]
+name = "haxball_core"
+# cdylib -> Python extension module via PyO3 / maturin
+# rlib   -> so we can add `cargo bench` / pure-Rust tests later
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+numpy = "0.22"
+rayon = "1.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

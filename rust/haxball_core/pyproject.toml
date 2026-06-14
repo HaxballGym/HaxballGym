@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "haxball_core"
+version = "0.1.0"
+description = "Headless, vectorized Haxball physics core (RocketSim-equivalent for Haxball)."
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.23"]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
