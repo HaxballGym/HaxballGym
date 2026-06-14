@@ -52,13 +52,17 @@ ALL FIDELITY TESTS PASSED — Rust port matches fn_base.py to 1e-9
 
 ## Build & run
 
+This crate is the `haxball_core` member of the repo's uv workspace. From the repo
+root:
+
 ```bash
-uv venv --python 3.11 .venv && source .venv/bin/activate
-uv pip install maturin numpy pytest
-maturin develop --release
-python tests/test_fidelity.py   # fidelity
-python bench.py                 # throughput
+uv sync                                              # builds this crate (maturin) + deps
+uv run rust/haxball_core/tests/test_fidelity.py      # fidelity (1e-9)
+uv run rust/haxball_core/bench.py                    # throughput
 ```
+
+Iterating on the Rust? `uv run maturin develop --release` rebuilds in place faster
+than a full `uv sync`.
 
 ## Status / what's ported
 

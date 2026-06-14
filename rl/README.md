@@ -5,14 +5,33 @@ lets you play against it.
 
 ## Quickstart
 
-```bash
-# from rust/haxball_core: uv venv .venv && source .venv/bin/activate
-#                         uv pip install maturin numpy torch pygame pillow && maturin develop --release
-source ../rust/haxball_core/.venv/bin/activate
+From the repo root (`uv sync` once to build the core + install deps):
 
-python train.py        # ~4 min: PPO self-play -> checkpoints/model.pt (best vs-random)
-python play.py         # YOU (red, arrow keys + X/space to kick) vs the model (blue)
-python render_demo.py static   # headless: writes demo.gif + frame.png
+```bash
+uv run rl/train.py              # ~4 min: PPO vs chase bot -> checkpoints/model.pt
+uv run rl/play.py               # YOU (red, arrows + X/space to kick) vs the model (blue)
+uv run rl/render_demo.py static # headless: writes demo.gif + frame.png
+```
+
+## Following a run live
+
+Training streams metrics to **TensorBoard** by default (local, no account). In a
+second terminal:
+
+```bash
+uv run tensorboard --logdir rl/runs      # then open http://localhost:6006
+```
+
+Logged series: `loss/{policy,value,entropy}`, `rollout/{reward,return,value}_mean`,
+`perf/decisions_per_s`, and `eval/chase_{goals,conceded,net}`. Prefer the cloud
+dashboard? `uv sync --extra wandb`, `uv run wandb login`, then `WANDB=1 uv run rl/train.py`.
+
+Config is a typed `Settings` model (`pydantic-settings`) — override any field via
+an env var or a `.env` file:
+
+```bash
+ITERS=500 JIGGLE=0.2 DEV=mps RUN_NAME=exp1 uv run rl/train.py
+TB=0 uv run rl/train.py    # disable all tracking
 ```
 
 ## How it works (the RLGym playbook, minimal)

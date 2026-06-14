@@ -1,8 +1,9 @@
 # HaxballGym — next iteration handoff
 
-Branch: `feat/headless-vectorized-sim`. Read `IMPROVEMENT_PLAN.md`,
-`rust/haxball_core/README.md`, and `rl/README.md` first. This file is the
-prioritized to-do for whoever picks it up next.
+Read [`../../design-docs/improvement-plan.md`](../../design-docs/improvement-plan.md),
+[`../../../ARCHITECTURE.md`](../../../ARCHITECTURE.md), `rust/haxball_core/README.md`,
+and `rl/README.md` first. This file is the prioritized to-do for whoever picks it up
+next.
 
 ## Where things stand (works, committed, verified)
 

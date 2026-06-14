@@ -1,17 +1,19 @@
-[tool.poetry]
+[project]
 name = "haxballgym"
-version = "0.5.7"
-description = "HaxBallGym is a python package that can be used to treat the game HaxBall as though it were an OpenAI-style environment for Reinforcement Learning projects."
-authors = ["Wazarr <jeje_04@live.com>"]
-readme = "README.md"
+version = "0.3.0"
+description = "Headless vectorized Haxball simulator for RL, plus training and in-browser play."
+requires-python = ">=3.12"
+dependencies = [
+    "haxball-core",     # rust/haxball_core  — the physics engine
+    "haxballgym-rl",    # rl/                — training + play
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-numpy = "^1.23.5"
-ursinaxball = "0.2.3"
-gym = "^0.26.2"
+[tool.uv.workspace]
+members = ["rust/haxball_core", "rl"]
 
+[tool.uv.sources]
+haxball-core = { workspace = true }
+haxballgym-rl = { workspace = true }
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+package = false         # the repo root is the workspace, not a built package

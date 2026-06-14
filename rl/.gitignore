@@ -2,3 +2,6 @@
 __pycache__/
 *.log
 checkpoints/*.zip
+runs/
+wandb/
+.env
