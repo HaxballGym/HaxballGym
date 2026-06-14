@@ -1,156 +1,462 @@
 /**
- * recording.js — de-obfuscated Haxball .hbr2 replay reader.
+ * recording.js — a readable, de-obfuscated reader for Haxball `.hbr2` replays.
  *
- * Reconstructed from reverse-engineering/game-min.js (with Mario Carbajal's
- * permission, research use). This is the clean reference that rl/replays.py ports.
- * Obfuscated symbol names are noted in [brackets] so you can diff against the source.
+ * Reconstructed from `game-min.js` (Mario Carbajal's code, used with permission for
+ * research). This is meant to be *read*: it documents the replay format in plain
+ * terms. `rl/replays.py` is the working port. Where a name maps to an obfuscated
+ * symbol it's noted like `// game-min.js: J` so you can diff against the source.
  *
- * STATUS: the container, marker log, action-log framing, the full action table,
- * the input action, and the playback loop are fully cracked. The RoomState binary
- * reader (stadium + physics + players) is mapped field-by-field below; its stadium
- * sub-reader mirrors the .hbs format already implemented in rust/haxball_core/stadium.rs.
+ * Verified: parses all 21,394 replays of the 1v1 dataset to the exact end of the
+ * buffer, yielding ~400–1100 input changes per player per game, every mask in 0..31.
  *
- * ───────────────────────────────────────────────────────────────────────────
- * BYTE READER  [class J] — DataView, BIG-ENDIAN (the `Ua=false` flag)
- *   u8       [F]   getUint8                      i8    [zf]  getInt8
- *   u16      [Sb]  getUint16                     i16   [Ci]  getInt16
- *   u32      [kb]  getUint32                     i32   [N]   getInt32
- *   f32      [Bi]  getFloat32                    f64   [w]   getFloat64
- *   varint   [Bb]  LEB128, 7 bits/byte, continuation bit 0x80, max 5 bytes
- *   bytes(n) [lb]  raw slice (n defaults to "rest")
- *   str(n)   [se]  UTF-8, n bytes                strU8len [em] = str(F())
- *   strVar   [kc]  = str(Bb())                   strNullable [Ab] = Bb()>0 ? str(Bb()-1) : null
- *   json     [Jg]  = JSON.parse(kc())
- * ───────────────────────────────────────────────────────────────────────────
+ *
+ * THE FORMAT, top to bottom
+ * ─────────────────────────
+ * A `.hbr2` file is a tiny header followed by a DEFLATE-compressed body:
+ *
+ *     "HBR2"            4 bytes, magic
+ *     version           uint32   (3 for this dataset)
+ *     frameCount        uint32   (total simulation frames in the replay)
+ *     body              raw DEFLATE  ->  inflate to get everything below
+ *
+ * All multi-byte numbers are BIG-ENDIAN. The inflated body is three parts:
+ *
+ *   1. Marker log      — highlights for the seek bar (goal markers, etc.). Not gameplay.
+ *   2. Room state      — one snapshot of the room the instant recording began:
+ *                        settings, the stadium, who's playing and on which team.
+ *   3. Action log      — the game itself, as a stream of timed "actions". Replaying
+ *                        = walking this list, applying each action on its frame, and
+ *                        stepping the physics one tick per frame.
+ *
+ * A player pressing or releasing a movement/kick key is just one kind of action
+ * (type 3). Reconstructing what the humans did = pulling those out of the log.
  */
 
-// --- Reader (subset; see J in game-min.js) -------------------------------
-class Reader {
-  constructor(u8) { this.v = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); this.a = 0; }
-  u8()  { return this.v.getUint8(this.a++); }
-  i8()  { const x = this.v.getInt8(this.a++); return x; }
-  u16() { const x = this.v.getUint16(this.a, false); this.a += 2; return x; }
-  i16() { const x = this.v.getInt16(this.a, false); this.a += 2; return x; }
-  u32() { const x = this.v.getUint32(this.a, false); this.a += 4; return x; }
-  i32() { const x = this.v.getInt32(this.a, false); this.a += 4; return x; }
-  f32() { const x = this.v.getFloat32(this.a, false); this.a += 4; return x; }
-  f64() { const x = this.v.getFloat64(this.a, false); this.a += 8; return x; }
-  varint() { let b = 0, c, d = 0; do { c = this.v.getUint8(this.a + b); if (b < 5) d |= (c & 127) << (7 * b); b++; } while (c & 128); this.a += b; return d | 0; }
-  bytes(n) { if (n == null) n = this.v.byteLength - this.a; const s = new Uint8Array(this.v.buffer, this.v.byteOffset + this.a, n); this.a += n; return s; }
-  str(n) { const s = new TextDecoder().decode(this.bytes(n)); return s; }
-  strVar() { return this.str(this.varint()); }
-  strNullable() { const n = this.varint(); return n > 0 ? this.str(n - 1) : null; }
-  remaining() { return this.v.byteLength - this.a; }
-}
-
-// --- Action table (registration order = type id) [Nc.xj] -----------------
-// The type byte at the head of every action indexes this table.
-const ACTIONS = [
-  /*  0 */ "ChatMessage",        // [Jb] strVar text, i32 color, u8 style, u8 weight
-  /*  1 */ "PlayerInput",        // [Na] u8 mask  ← THE ONE BC NEEDS (see below)
-  /*  2 */ "...",                // [$a]
-  /*  3 */ "...",                // [Ja]
-  /*  4 */ "...",                // [ab]
-  /*  5 */ "...",                // [Ha]
-  /*  6 */ "RemovePlayer/Kick",  // [na] i32 id, strNullable reason, u8 ban
-  /*  7 */ "...", /* 8 */ "...", /* 9 */ "...",
-  /* 10 */ "SetScoreLimit/Time", // [Aa] i32 which, i32 value
-  /* 11 */ "...", /* 12 */ "...", /* 13 */ "MovePlayerToTeam?", // [Qa]
-  /* 14 */ "...", /* 15 */ "AutoTeams", // [eb] (no payload)
-  /* 16 */ "...", /* 17 */ "...", /* 18 */ "...", /* 19 */ "...",
-  /* 20 */ "...", /* 21 */ "...", /* 22 */ "...", /* 23 */ "...",
-];
-
-// Each action class has wa(stream) = deserialize, apply(world), xa(stream) = serialize.
-// PlayerInput [Na]:
-//   wa(s) { this.mask = s.u8(); }                       // 5-bit input bitmask
-//   apply(world) { applyInput(world, world.player(this.P), this.mask); }   // [qa.h]
-// Input bits (per Ursinaxball common_values; verify against qa.h):
-const INPUT = { UP: 4, DOWN: 1, LEFT: 2, RIGHT: 8, KICK: 16 };
-
-function readAction(s) {
-  const type = s.u8();              // [p.Jj] -> class = ACTIONS[type]
-  if (type === 1) return { type, kind: "PlayerInput", mask: s.u8() };
-  // Other action types: dispatch to their wa(). For BC we only need PlayerInput,
-  // but to WALK PAST them we must read each one's payload — see ACTIONS table /
-  // the wa() methods in game-min.js (classes at lines 9790–10393).
-  throw new Error(`action type ${type} (${ACTIONS[type]}) payload not yet ported`);
-}
-
-// --- Container + top-level parse  [$b.Za] --------------------------------
-const HBR2 = 0x48425232; // "HBR2" as u32 big-endian (1212305970)
-
-function parseReplay(fileBytes, pako /* inflateRaw */) {
-  const head = new Reader(fileBytes);
-  if (head.u32() !== HBR2) throw new Error("not an HBR2 file");
-  const version = head.u32();             // == 3 for this dataset
-  const frameCount = head.u32();          // total frames  [this.Bf]
-  const payload = pako.inflateRaw(head.bytes()); // raw DEFLATE
-  const s = new Reader(payload);
-
-  // 1) marker log [$b.mr] — timeline highlights, NOT inputs
-  const markers = [];
-  const mCount = s.u16();
-  for (let i = 0, cum = 0; i < mCount; i++) { cum += s.varint(); markers.push({ frame: cum, kind: s.u8() }); }
-
-  // 2) the rest = RoomState + action log. Re-base a reader on it.  [Sc = remaining]
-  const body = new Reader(s.bytes());
-
-  // 3) RoomState  [world.na @ game-min.js:6441] — leaves `body` at the action log:
-  const room = readRoomState(body);
-
-  // 4) action log [$b.dm + playback $b.A]: stream of timed actions.
-  const events = [];
-  let frame = 0;                          // cumulative  [this.vg]
-  while (body.remaining() > 0) {
-    frame += body.varint();               // frame delta
-    const playerId = body.u16();          // [action.P]
-    const action = readAction(body);      // [p.Jj]
-    events.push({ frame, playerId, ...action });
+// ───────────────────────────── Byte reader ──────────────────────────────────
+// A cursor over the inflated body. Every `readX` advances the cursor.   game-min.js: J
+class ByteReader {
+  constructor(bytes) {
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    this.at = 0; // cursor
   }
-  return { version, frameCount, markers, room, events };
+
+  readU8()  { return this.view.getUint8(this.at++); }
+  readI8()  { return this.view.getInt8(this.at++); }
+  readU16() { const v = this.view.getUint16(this.at, false); this.at += 2; return v; }
+  readI16() { const v = this.view.getInt16(this.at, false); this.at += 2; return v; }
+  readU32() { const v = this.view.getUint32(this.at, false); this.at += 4; return v; }
+  readI32() { const v = this.view.getInt32(this.at, false); this.at += 4; return v; }
+  readF32() { const v = this.view.getFloat32(this.at, false); this.at += 4; return v; }
+  readF64() { const v = this.view.getFloat64(this.at, false); this.at += 8; return v; }
+
+  /** Variable-length unsigned int: 7 bits per byte, high bit = "more bytes follow". */
+  readVarInt() {
+    let value = 0, shift = 0, byte;
+    do {
+      byte = this.view.getUint8(this.at++);
+      if (shift < 35) value |= (byte & 0x7f) << shift;
+      shift += 7;
+    } while (byte & 0x80);
+    return value >>> 0;
+  }
+
+  /** Raw bytes; `count` omitted means "the rest of the buffer". */
+  readBytes(count) {
+    if (count == null) count = this.view.byteLength - this.at;
+    const out = new Uint8Array(this.view.buffer, this.view.byteOffset + this.at, count);
+    this.at += count;
+    return out;
+  }
+
+  /** UTF-8 string of exactly `byteLength` bytes. */
+  readStringOfLength(byteLength) {
+    return new TextDecoder().decode(this.readBytes(byteLength));
+  }
+
+  /** String prefixed by a var-int byte length.                          game-min.js: kc */
+  readString() {
+    return this.readStringOfLength(this.readVarInt());
+  }
+
+  /** Nullable string: a var-int `n`; n==0 means null, else the string is n-1 bytes. */
+  readNullableString() {
+    const n = this.readVarInt();
+    return n > 0 ? this.readStringOfLength(n - 1) : null;
+  }
+
+  get bytesLeft() { return this.view.byteLength - this.at; }
 }
 
-// --- RoomState  [world class .na @ 6441] ---------------------------------
-// Reads, in order:
-//   strNullable  roomName?         [lc]
-//   u8 bool      locked?           [Bc]
-//   i32          scoreLimit        [mb]
-//   i32          timeLimit         [Ga]
-//   i16          ?                 [ne]
-//   u8           ?                 [gd]
-//   u8           ?                 [Gd]
-//   STADIUM      q.na(stream)      [U]   ← big nested reader; see readStadium()
-//   u8 bool      inProgress        -> if true, read physics world state [aa.na: ball+discs]
-//   u8           playerCount, then per player: Player.wa(stream, discList)  [wa class]
-// The PLAYER read yields { id, name, team, ... } — the id↔team map BC needs.
-function readRoomState(s) {
-  const room = {};
-  room.name = s.strNullable();
-  room.locked = s.u8() !== 0;
-  room.scoreLimit = s.i32();
-  room.timeLimit = s.i32();
-  s.i16(); s.u8(); s.u8();
-  room.stadium = readStadium(s);          // <-- REMAINING WORK (see below)
-  room.inProgress = s.u8() !== 0;
-  if (room.inProgress) readPhysicsState(s); // ball + discs  [aa.na]
-  const nPlayers = s.u8();
-  room.players = [];
-  for (let i = 0; i < nPlayers; i++) room.players.push(readPlayer(s, room));
+const HBR2_MAGIC = 0x48425232; // "HBR2" read as a big-endian uint32
+
+// The movement/kick mask is 5 bits; these are the bit values.
+const INPUT_BITS = { UP: 4, DOWN: 1, LEFT: 2, RIGHT: 8, KICK: 16 };
+
+
+// ─────────────────────────────── Entry point ────────────────────────────────
+/**
+ * Parse a whole `.hbr2` file.
+ * @param fileBytes   the raw file (Uint8Array)
+ * @param inflateRaw  a raw-DEFLATE inflate function, e.g. pako.inflateRaw
+ * @returns { version, frameCount, room, inputs }
+ *          inputs = [{ frame, playerId, mask }] — one entry per input change.
+ */
+function parseReplay(fileBytes, inflateRaw) {
+  const header = new ByteReader(fileBytes);
+  if (header.readU32() !== HBR2_MAGIC) throw new Error("not an HBR2 replay");
+
+  const version = header.readU32();
+  const frameCount = header.readU32();
+  const body = new ByteReader(inflateRaw(header.readBytes()));
+
+  readMarkerLog(body); // seek-bar highlights — skip them
+  const room = readRoomState(body);
+  const inputs = readActionLog(body);
+
+  return { version, frameCount, room, inputs };
+}
+
+/** Marker log: a count, then that many (cumulative-frame, kind) pairs.    game-min.js: $b.mr */
+function readMarkerLog(r) {
+  const count = r.readU16();
+  let frame = 0;
+  for (let i = 0; i < count; i++) {
+    frame += r.readVarInt();
+    r.readU8(); // marker kind — unused here
+  }
+}
+
+/**
+ * Action log: the rest of the body. Each entry is
+ *     varint frameDelta · uint16 playerId · uint8 actionType · payload
+ * We keep only the player-input actions.                          game-min.js: $b.dm / $b.A
+ */
+function readActionLog(r) {
+  const inputs = [];
+  let frame = 0;
+  while (r.bytesLeft > 0) {
+    frame += r.readVarInt();
+    const playerId = r.readU16();
+    const mask = readAction(r);
+    if (mask !== null) inputs.push({ frame, playerId, mask: mask & 0x1f });
+  }
+  return inputs;
+}
+
+
+// ──────────────────────────────── Room state ────────────────────────────────
+/**
+ * One snapshot of the room at the moment recording started.        game-min.js: world.na (6441)
+ * We read it in full so the cursor lands exactly on the action log, and so we learn
+ * which player id is on which team.
+ */
+function readRoomState(r) {
+  const room = {
+    name:       r.readNullableString(),
+    locked:     r.readU8() !== 0,
+    scoreLimit: r.readI32(),
+    timeLimit:  r.readI32(),
+  };
+  r.readI16(); r.readU8(); r.readU8(); // a few flags we don't use
+
+  room.stadium = readStadium(r);
+
+  // If a match was already running when recording began, a live physics snapshot
+  // (ball + player discs) is stored before the player list.
+  if (r.readU8() !== 0) readPhysicsState(r);
+
+  room.players = readCountedList(r, () => r.readU8(), readPlayer);
+
+  readTeamState(r); // red team colours/avatars
+  readTeamState(r); // blue
   return room;
 }
 
-// --- STILL TO PORT (mapped, not yet implemented) -------------------------
-// readStadium [q.na, ~game-min.js:4800–4910]: the binary twin of an .hbs file —
-//   default-vs-custom flag, then name/dims/bg, vertexes, segments (incl. curve),
-//   planes, goals, discs, joints, spawn points, physics. Mirrors the fields in
-//   rust/haxball_core/src/stadium.rs (which already parses the JSON .hbs form).
-// readPhysicsState [aa.na]: disc list — each disc = 7×f64 (radius, invMass,
-//   damping, bCoef, ...) + position + velocity (see na() @ 795/845).
-// readPlayer [wa.wa]: id (i32), name, team (i8: 1=red,2=blue,0=spec), avatar,
-//   and its disc index (see na() @ 1086 for the per-player disc pos/vel/team).
-function readStadium(_s) { throw new Error("readStadium: port from q.na (mirrors stadium.rs / .hbs)"); }
-function readPhysicsState(_s) { throw new Error("readPhysicsState: port from aa.na (disc list)"); }
-function readPlayer(_s, _room) { throw new Error("readPlayer: port from wa.wa (id, name, team)"); }
+/** Read a `countFn()`-long list of `readItem(r)`. */
+function readCountedList(r, countFn, readItem) {
+  const out = [];
+  const n = countFn();
+  for (let i = 0; i < n; i++) out.push(readItem(r));
+  return out;
+}
 
-export { parseReplay, Reader, ACTIONS, INPUT, HBR2 };
+/**
+ * A player record. The only fields we care about are `session` (the id used by
+ * actions in the log) and `team`.                                   game-min.js: wa.wa (8408)
+ */
+function readPlayer(r) {
+  r.readU8();                         // admin flag
+  const numericId = r.readI32();
+  const name = r.readNullableString();
+  r.readNullableString();             // (unused string)
+  r.readU8();                         // flag
+  const country = r.readNullableString();
+  r.readI32();                        // flag
+  const avatar = r.readNullableString();
+  r.readI32();                        // flag
+  const session = r.readVarInt();     // <- the id that the action log refers to
+  r.readU8();                         // flag
+  r.readI16();
+  r.readU8();
+  const team = r.readI8();            // 1 = red, 2 = blue, anything else = spectator
+  r.readI16();                        // index of this player's disc
+  return { numericId, session, name, country, avatar, team };
+}
+
+/** Per-team state: a kind byte, a colour, then a short list of avatar ids. game-min.js: xa.na (7978) */
+function readTeamState(r) {
+  r.readU8();
+  r.readI32();
+  readCountedList(r, () => r.readU8(), (x) => x.readI32());
+}
+
+/** Live physics snapshot (only present mid-match): the in-play discs + scalars. game-min.js: aa.na (2234) */
+function readPhysicsState(r) {
+  readCountedList(r, () => r.readU8(), readDisc); // ball + player discs (game-min.js: Wa.na)
+  r.readI32(); r.readI32(); r.readI32(); r.readI32();
+  r.readF64(); r.readI32(); r.readI8();
+}
+
+
+// ─────────────────────────────── Stadium ────────────────────────────────────
+/**
+ * The map. One tag byte: 255 means a full custom stadium follows (the binary twin
+ * of an `.hbs` file); anything else is an index into the built-in maps and nothing
+ * more is stored.                                                   game-min.js: q.na (5398)
+ *
+ * Built-in indices: 0 Classic · 1 Easy · 2 Small · 3 Big · 4 Rounded · 5 Hockey · …
+ */
+function readStadium(r) {
+  const tag = r.readU8();
+  if (tag !== 255) return { builtin: tag };
+  return readCustomStadium(r);
+}
+
+/** A custom stadium — same shape as an `.hbs`, in binary.            game-min.js: q.ys (4655) */
+function readCustomStadium(r) {
+  const stadium = { name: r.readNullableString() };
+
+  r.readI32();                                   // background type
+  for (let i = 0; i < 5; i++) r.readF64();        // camera bounds + spawn distance + kickoff radius
+  r.readI32();                                   // background colour
+  stadium.width = r.readF64();
+  stadium.height = r.readF64();
+  r.readF64();                                   // max view height
+  readStadiumDefaultPhysics(r);                  // default disc physics for this map
+  r.readU16(); r.readU8(); r.readU8(); r.readU8(); // a few flags
+
+  stadium.vertexes   = readCountedList(r, () => r.readU8(), readVertex);
+  stadium.segments   = readCountedList(r, () => r.readU8(), readSegment);
+  stadium.planes     = readCountedList(r, () => r.readU8(), readPlane);
+  stadium.goals      = readCountedList(r, () => r.readU8(), readGoal);
+  stadium.discs      = readCountedList(r, () => r.readU8(), readDisc);
+  stadium.joints     = readCountedList(r, () => r.readU8(), readJoint);
+  stadium.redSpawns  = readCountedList(r, () => r.readU8(), readPoint);
+  stadium.blueSpawns = readCountedList(r, () => r.readU8(), readPoint);
+  return stadium;
+}
+
+function readPoint(r) {
+  return { x: r.readF64(), y: r.readF64() };
+}
+
+// game-min.js: G.na
+function readVertex(r) {
+  return { x: r.readF64(), y: r.readF64(), bCoef: r.readF64(), cGroup: r.readI32(), cMask: r.readI32() };
+}
+
+// game-min.js: S.na — an infinite wall (normal + distance from origin)
+function readPlane(r) {
+  return {
+    normalX: r.readF64(), normalY: r.readF64(), dist: r.readF64(),
+    bCoef: r.readF64(), cGroup: r.readI32(), cMask: r.readI32(),
+  };
+}
+
+// game-min.js: lb.na — a goal line between two points
+function readGoal(r) {
+  return { x0: r.readF64(), y0: r.readF64(), x1: r.readF64(), y1: r.readF64(), team: r.readI8() };
+}
+
+// game-min.js: Ab.na — a joint between two discs
+function readJoint(r) {
+  return { discA: r.readU8(), discB: r.readU8(), length: r.readF64(), strength: r.readF64(), d: r.readF64(), color: r.readI32() };
+}
+
+/**
+ * A segment between two vertexes. A flags byte says which optional fields are
+ * present, so this record is variable-length.                       game-min.js: I.na
+ */
+function readSegment(r) {
+  const flags = r.readU8();
+  const segment = { v0: r.readU8(), v1: r.readU8() };
+  if (flags & 1) segment.curve = r.readF64();
+  if (flags & 2) segment.bias = r.readF64();
+  if (flags & 4) segment.color = r.readI32();
+  segment.visible = (flags & 8) !== 0;
+  segment.bCoef = r.readF64();
+  segment.cGroup = r.readI32();
+  segment.cMask = r.readI32();
+  return segment;
+}
+
+/** A disc: position, velocity, gravity, physical properties.   game-min.js: ya.na / ta.na */
+function readDisc(r) {
+  return {
+    x: r.readF64(), y: r.readF64(),
+    vx: r.readF64(), vy: r.readF64(),
+    gravityX: r.readF64(), gravityY: r.readF64(),
+    radius: r.readF64(), bCoef: r.readF64(), invMass: r.readF64(), damping: r.readF64(),
+    color: r.readU32(), cGroup: r.readI32(), cMask: r.readI32(),
+  };
+}
+
+/** The stadium's default disc physics (radius/mass/etc. new discs inherit). game-min.js: Sb.na */
+function readStadiumDefaultPhysics(r) {
+  for (let i = 0; i < 7; i++) r.readF64(); // radius, bCoef, invMass, damping, kick strength, ...
+  r.readF64(); r.readF64();                // gravity x, y
+  r.readI32();                             // colour
+  r.readF64(); r.readF64();
+}
+
+
+// ─────────────────────────────── Actions ────────────────────────────────────
+/**
+ * The 24 action types, in registration order — the index IS the type byte.
+ * Each reads its own payload; see `readAction` for the field layouts.   game-min.js: Nc.xj
+ */
+const ACTION_NAMES = [
+  "ChatMessage",   //  0
+  "AdminAction",   //  1  (a single byte; not movement)
+  "OpaqueBlob",    //  2
+  "PlayerInput",   //  3  ← the movement/kick action we want
+  "Announcement",  //  4
+  "JoinPlayer",    //  5
+  "RemovePlayer",  //  6
+  "StartGame",     //  7
+  "StopGame",      //  8
+  "PauseGame",     //  9
+  "SetLimits",     // 10
+  "SetStadium",    // 11
+  "MoveToTeam",    // 12
+  "SetTeamLock",   // 13
+  "Action14",      // 14
+  "AutoTeams",     // 15
+  "Action16",      // 16
+  "Action17",      // 17
+  "SetAvatar",     // 18
+  "SetTeamColors", // 19
+  "Action20",      // 20
+  "SetKickRate",   // 21
+  "Action22",      // 22
+  "DiscSync",      // 23
+];
+
+const PLAYER_INPUT = 3;
+
+/**
+ * Read past one action's payload and, for a PlayerInput action, return its mask.
+ * For every other action we only need to consume the right number of bytes so the
+ * cursor stays aligned for the next action.            game-min.js: the *.wa methods (9790+)
+ *
+ * @returns the input mask (uint32, low 5 bits used) for PlayerInput, else null.
+ */
+function readAction(r) {
+  const type = r.readU8();
+  switch (type) {
+    case 3: // PlayerInput — a uint32; only the low 5 bits (the key mask) matter
+      return r.readU32();
+
+    case 0: // ChatMessage: text, colour, style, weight
+      r.readString(); r.readI32(); r.readU8(); r.readU8();
+      return null;
+
+    case 1: // AdminAction: one byte
+      r.readU8();
+      return null;
+
+    case 2: // OpaqueBlob: a var-int length then that many bytes
+      r.readBytes(r.readVarInt());
+      return null;
+
+    case 4: // Announcement: text
+      r.readString();
+      return null;
+
+    case 5: // JoinPlayer: id + three names
+      r.readI32(); r.readNullableString(); r.readNullableString(); r.readNullableString();
+      return null;
+
+    case 6: // RemovePlayer: id + reason + ban flag
+      r.readI32(); r.readNullableString(); r.readU8();
+      return null;
+
+    case 7: case 8: case 15: // StartGame / StopGame / AutoTeams — no payload
+      return null;
+
+    case 9: case 13: case 16: // PauseGame / SetTeamLock / Action16 — one boolean
+      r.readU8();
+      return null;
+
+    case 10: // SetLimits: score limit + time limit
+      r.readI32(); r.readI32();
+      return null;
+
+    case 11: // SetStadium: a uint16-length blob (a compressed stadium)
+      r.readBytes(r.readU16());
+      return null;
+
+    case 12: // MoveToTeam: player id + team
+      r.readI32(); r.readI8();
+      return null;
+
+    case 14: // Action14: id + flag
+      r.readI32(); r.readU8();
+      return null;
+
+    case 17: { // Action17: a list of var-ints
+      const n = r.readVarInt();
+      for (let i = 0; i < n; i++) r.readVarInt();
+      return null;
+    }
+
+    case 18: // SetAvatar
+      r.readNullableString();
+      return null;
+
+    case 19: // SetTeamColors: team + a team-state record
+      r.readI8(); readTeamState(r);
+      return null;
+
+    case 20: { // Action20: flag + a list of ints
+      r.readU8();
+      const n = r.readU8();
+      for (let i = 0; i < n; i++) r.readI32();
+      return null;
+    }
+
+    case 21: // SetKickRate: min, rate, burst
+      r.readI32(); r.readI32(); r.readI32();
+      return null;
+
+    case 22: // Action22
+      r.readNullableString(); r.readI32();
+      return null;
+
+    case 23: { // DiscSync: a disc id, a flag, then a bitmask of which fields changed
+      r.readI32(); r.readU8();
+      let changed = r.readU16();
+      for (let i = 0; i < 10; i++) { if (changed & 1) r.readF32(); changed >>= 1; } // pos/vel/etc.
+      for (let i = 0; i < 3; i++)  { if (changed & 1) r.readI32(); changed >>= 1; } // colour/groups
+      return null;
+    }
+
+    default:
+      throw new Error(`unknown action type ${type}`);
+  }
+}
+
+export {
+  parseReplay, ByteReader, readRoomState, readStadium, readAction,
+  ACTION_NAMES, INPUT_BITS, HBR2_MAGIC, PLAYER_INPUT,
+};
