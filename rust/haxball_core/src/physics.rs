@@ -43,11 +43,31 @@ pub mod flag {
     pub const BALL: i64 = 1;
     pub const RED: i64 = 2;
     pub const BLUE: i64 = 4;
+    pub const REDKO: i64 = 8;
+    pub const BLUEKO: i64 = 16;
     pub const WALL: i64 = 32;
     pub const ALL: i64 = 63;
     pub const KICK: i64 = 64;
     pub const SCORE: i64 = 128;
     pub const PLAYER_COLLISION: i64 = BALL | RED | BLUE | WALL; // 39
+
+    /// Parse a Haxball collision list like ["ball","red","wall"] -> bitset.
+    pub fn parse(names: &[String]) -> i64 {
+        names.iter().fold(0, |acc, n| {
+            acc | match n.as_str() {
+                "ball" => BALL,
+                "red" => RED,
+                "blue" => BLUE,
+                "redKO" => REDKO,
+                "blueKO" => BLUEKO,
+                "wall" => WALL,
+                "all" => ALL,
+                "kick" => KICK,
+                "score" => SCORE,
+                _ => 0,
+            }
+        })
+    }
 }
 
 #[inline(always)]
@@ -351,9 +371,24 @@ pub struct World {
     pub blue_score: u32,
     pub steps: u64,
     pub kick_cancel: Vec<bool>, // per player
+    pub spawn_distance: f64,    // stadium spawnDistance (kickoff spread)
+    pub red_spawn: Vec<Vec2>,   // explicit spawn points (else the spawn_distance formula)
+    pub blue_spawn: Vec<Vec2>,
 }
 
 const HALF_GOAL: f64 = 64.0; // classic goal mouth spans y in [-64, 64]
+
+/// Default kickoff y-offset for the i-th player of a team (game.reset_discs_positions):
+/// 0, +55, -55, +110, -110, … used when the stadium has no explicit spawn points.
+#[inline]
+fn row_offset(i: usize) -> f64 {
+    let row = ((i + 1) >> 1) as f64;
+    if i % 2 == 1 {
+        -55.0 * row
+    } else {
+        55.0 * row
+    }
+}
 
 impl World {
     /// Build a classic-stadium match with `n_red` vs `n_blue` players.
@@ -424,6 +459,9 @@ impl World {
             blue_score: 0,
             steps: 0,
             kick_cancel: vec![false; n_players],
+            spawn_distance: 277.5, // classic
+            red_spawn: Vec::new(),
+            blue_spawn: Vec::new(),
         };
         w.reset_positions();
         w
@@ -433,21 +471,24 @@ impl World {
     pub fn reset_positions(&mut self) {
         self.discs[0].pos = [0.0, 0.0];
         self.discs[0].vel = [0.0, 0.0];
-        let spawn = 277.5; // classic spawnDistance
-        let mut red_i = 0i32;
-        let mut blue_i = 0i32;
+        let spawn = self.spawn_distance;
+        let mut red_i = 0usize;
+        let mut blue_i = 0usize;
         for k in 0..self.n_players {
-            let d = &mut self.discs[self.first_player + k];
+            let (team, fp) = (self.discs[self.first_player + k].team, self.first_player + k);
+            let d = &mut self.discs[fp];
             d.vel = [0.0, 0.0];
-            if d.team == flag::RED {
-                let row = (red_i + 1) >> 1;
-                let y = if red_i % 2 == 1 { -55.0 * row as f64 } else { 55.0 * row as f64 };
-                d.pos = [-spawn, y];
+            if team == flag::RED {
+                d.pos = match self.red_spawn.get(red_i) {
+                    Some(p) => *p,
+                    None => [-spawn, row_offset(red_i)],
+                };
                 red_i += 1;
             } else {
-                let row = (blue_i + 1) >> 1;
-                let y = if blue_i % 2 == 1 { -55.0 * row as f64 } else { 55.0 * row as f64 };
-                d.pos = [spawn, y];
+                d.pos = match self.blue_spawn.get(blue_i) {
+                    Some(p) => *p,
+                    None => [spawn, row_offset(blue_i)],
+                };
                 blue_i += 1;
             }
         }

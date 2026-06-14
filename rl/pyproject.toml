@@ -5,6 +5,7 @@ description = "PPO training, self-play, and human-vs-model play on the haxball_c
 requires-python = ">=3.12"
 dependencies = [
     "haxball-core",           # the Rust physics engine (workspace member)
+    "haxballgym",             # the composable env API (workspace member)
     "numpy>=1.23",
     "torch>=2.0",
     "pygame>=2.5",            # play.py (human vs model)
@@ -22,3 +23,4 @@ package = false               # a folder of scripts, not an installable distribu
 
 [tool.uv.sources]
 haxball-core = { workspace = true }
+haxballgym = { workspace = true }

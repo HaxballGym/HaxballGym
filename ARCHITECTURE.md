@@ -12,12 +12,18 @@ cleverer algorithm, is what reaches superhuman.
 │  rl/            policy · PPO · opponents · replays · render   │   Python
 │                 live tracking (TensorBoard / W&B)             │
 └───────────────▲─────────────────────────────────────────────┘
-                │  imports the `haxball_core` extension; one
-                │  step(actions) call advances ALL envs
+                │  composes env pieces; one step() advances ALL envs
+┌───────────────┴─────────────────────────────────────────────┐
+│  haxballgym/    RLGym-v2-style composable env (batched):      │   Python
+│    Env · ObsBuilder · RewardFunction · ActionParser ·         │
+│    DoneCondition · StateMutator · GameState · stadiums/*.hbs   │
+└───────────────▲─────────────────────────────────────────────┘
+                │  imports the `haxball_core` extension; physics only
 ┌───────────────┴─────────────────────────────────────────────┐
 │  rust/haxball_core/                                           │   Rust (PyO3)
-│    lib.rs      VecEnv: batched envs, obs/reward/done, rayon   │
+│    lib.rs      VecEnv: batched physics + GameState, rayon     │
 │    physics.rs  collisions + integration (port of fn_base.py)  │
+│    stadium.rs  .hbs loader (serde): any map -> World          │
 └──────────────────────────────────────────────────────────────┘
                 ▲
                 │  reference only (never imported)
@@ -27,11 +33,16 @@ cleverer algorithm, is what reaches superhuman.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Rule:** `rl/` may depend on `haxball_core`; `haxball_core` depends on nothing in
-the repo above it; `reverse-engineering/` is documentation, imported by nobody. A
-change that makes the core import from `rl/`, or that runs game-engine/render code
-inside the core, is an architecture violation — it reintroduces the slowness this
-whole design exists to kill.
+**Rule:** dependencies point downward only — `rl/` → `haxballgym` → `haxball_core`;
+the core depends on nothing above it; `reverse-engineering/` is documentation,
+imported by nobody. A change that makes a lower layer import from a higher one, or
+that runs game-engine/render code inside the core, is an architecture violation — it
+reintroduces the slowness this whole design exists to kill.
+
+**Obs/reward/done now live in `haxballgym`** (composable Python, batched-vectorized),
+not baked into the core. The core exposes a batched `GameState` + geometry
+(`goals()`, `player_max_speed`) and resolves no rewards. Goal geometry is read from
+the stadium, so the same obs/reward train on any `.hbs` map.
 
 ## Why a native core (the core belief)
 

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "haxballgym"
+version = "0.3.0"
+description = "Composable, batched RLGym-v2-style env over the headless haxball_core engine."
+requires-python = ">=3.12"
+dependencies = [
+    "haxball-core",
+    "numpy>=1.23",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["haxballgym"]   # ships haxballgym/stadiums/*.hbs as package data
+
+[tool.uv.sources]
+haxball-core = { workspace = true }

@@ -7,6 +7,7 @@ members = [
     "haxball-core",
     "haxballgym",
     "haxballgym-rl",
+    "haxballgym-workspace",
 ]
 
 [[package]]
@@ -293,16 +294,16 @@ requires-dist = [{ name = "numpy", specifier = ">=1.23" }]
 [[package]]
 name = "haxballgym"
 version = "0.3.0"
-source = { virtual = "." }
+source = { editable = "haxballgym" }
 dependencies = [
     { name = "haxball-core" },
-    { name = "haxballgym-rl" },
+    { name = "numpy" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "haxball-core", editable = "rust/haxball_core" },
-    { name = "haxballgym-rl", virtual = "rl" },
+    { name = "numpy", specifier = ">=1.23" },
 ]
 
 [[package]]
@@ -311,6 +312,7 @@ version = "0.3.0"
 source = { virtual = "rl" }
 dependencies = [
     { name = "haxball-core" },
+    { name = "haxballgym" },
     { name = "loguru" },
     { name = "numpy" },
     { name = "pillow" },
@@ -328,6 +330,7 @@ wandb = [
 [package.metadata]
 requires-dist = [
     { name = "haxball-core", editable = "rust/haxball_core" },
+    { name = "haxballgym", editable = "haxballgym" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "numpy", specifier = ">=1.23" },
     { name = "pillow", specifier = ">=10.0" },
@@ -338,6 +341,23 @@ requires-dist = [
     { name = "wandb", marker = "extra == 'wandb'", specifier = ">=0.16" },
 ]
 provides-extras = ["wandb"]
+
+[[package]]
+name = "haxballgym-workspace"
+version = "0.3.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "haxball-core" },
+    { name = "haxballgym" },
+    { name = "haxballgym-rl" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "haxball-core", editable = "rust/haxball_core" },
+    { name = "haxballgym", editable = "haxballgym" },
+    { name = "haxballgym-rl", virtual = "rl" },
+]
 
 [[package]]
 name = "idna"

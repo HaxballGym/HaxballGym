@@ -49,10 +49,18 @@ has almost no incentive to defend. Fixes, in order:
   Headless). Then re-simulate through the core to build `(obs, action)` and run
   `rl/bc_train.py` → PPO finetunes from it (the Necto recipe). NOTE the BC obs must
   use the replays' stadium, not default classic.
-- **Wire curved goal-net arcs + kickoff-barrier semicircle** into the classic `World`
-  (math is ported & unit-tested in `physics.rs`: `segment_curve` / `segment_apply_bias`).
-- **`.hbs` stadium loader** in Rust (currently the classic stadium is built in code) —
-  needed for other maps and to match the replays' stadium.
+- **Wire curved segments into collision** (`physics.rs` `resolve_collisions`). The
+  curve math is ported & unit-tested (`segment_curve` / `segment_apply_bias`), and the
+  `.hbs` loader already parses curved segments — it just **skips** them today (goal-net
+  arcs, kickoff semicircles; logged with a count). Add a `curve` field to the `Segment`
+  struct + circle center/radius/angles, and resolve disc-vs-arc to finish them. Until
+  then maps load fine (curved pieces are cosmetic / kickoff-only for training).
+- ~~**`.hbs` stadium loader**~~ **DONE.** `haxball_core::stadium` parses any `.hbs`
+  (serde, trait resolution, defaults, y-symmetry, collision flags) →
+  `VecEnv.from_hbs(text, ...)`. `haxballgym.make_default_env(stadium="futsal-classic")`
+  or any `.hbs` path. Classic-loaded is bit-identical to the built-in classic
+  (`haxballgym/tests/test_stadium_loader.py`). Obs/reward are stadium-driven (goal
+  geometry from `VecEnv.goals()`), so the same policy setup trains on any map.
 - **2v2 / 3v3**: the core already supports N players and the obs already includes other
   players; wrap a PettingZoo-parallel API and train the shared policy at larger team sizes.
 - **WASM + ONNX**: compile `haxball_core` to WASM (wasm-bindgen) + export the policy to

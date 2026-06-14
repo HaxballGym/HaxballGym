@@ -1,18 +1,20 @@
 [project]
-name = "haxballgym"
+name = "haxballgym-workspace"
 version = "0.3.0"
-description = "Headless vectorized Haxball simulator for RL, plus training and in-browser play."
+description = "Headless vectorized Haxball simulator for RL, plus training and in-browser play (uv workspace root)."
 requires-python = ">=3.12"
 dependencies = [
     "haxball-core",     # rust/haxball_core  — the physics engine
+    "haxballgym",       # haxballgym/        — the composable env API
     "haxballgym-rl",    # rl/                — training + play
 ]
 
 [tool.uv.workspace]
-members = ["rust/haxball_core", "rl"]
+members = ["rust/haxball_core", "haxballgym", "rl"]
 
 [tool.uv.sources]
 haxball-core = { workspace = true }
+haxballgym = { workspace = true }
 haxballgym-rl = { workspace = true }
 
 [tool.uv]
