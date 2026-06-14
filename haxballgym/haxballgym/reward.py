@@ -35,11 +35,16 @@ class VelocityPlayerToBall(RewardFunction):
 
 
 class VelocityBallToGoal(RewardFunction):
-    """Reward ball speed toward the nearest point of the *attacked* goal line
-    (side-aware per player, geometry from the stadium — works on any map)."""
+    """Reward ball speed toward the nearest point of a goal line (side-aware per
+    player, geometry from the stadium — works on any map). `attacked=True` is the
+    opponent goal (offense); `attacked=False` is the own goal — combine it with a
+    negative weight to punish conceding (defense)."""
+
+    def __init__(self, attacked: bool = True):
+        self.attacked = attacked
 
     def get_rewards(self, state, prev, terminated, truncated):
-        p0, p1 = state.goal_line(attacked=True)  # (N,P,2) each
+        p0, p1 = state.goal_line(attacked=self.attacked)  # (N,P,2) each
         ball = state.ball_pos[:, None, :]  # (N,1,2)
         target = closest_on_line(ball, p0, p1)  # (N,P,2)
         bd = target - ball  # (N,P,2)

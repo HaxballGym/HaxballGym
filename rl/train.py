@@ -27,7 +27,19 @@ from opponents import chase_bins
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from torch.distributions import Categorical
 
-from haxballgym import make_default_env
+from haxballgym import (
+    CombinedReward,
+    DefaultObs,
+    DiscreteAction,
+    Env,
+    GoalCondition,
+    GoalReward,
+    KickoffMutator,
+    TimeoutCondition,
+    TransitionEngine,
+    VelocityBallToGoal,
+    VelocityPlayerToBall,
+)
 
 # Clean console output: timestamp + level + message, no module noise.
 logger.remove()
@@ -164,11 +176,32 @@ class Policy(nn.Module):
         return logp, ent, v
 
 
+def make_env(n_envs, stadium=None):
+    """This bot's env config — compose the haxballgym pieces with the reward we want.
+    Reward = dense velocity shaping (WazBot) + a DEFENSIVE term that punishes the ball
+    drifting toward our own goal, so the agent learns to defend (not just attack).
+    This composition is research config; tune it freely (it lives here, not in the lib)."""
+    return Env(
+        TransitionEngine(n_envs, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP, stadium=stadium),
+        DefaultObs(),
+        DiscreteAction(),
+        CombinedReward(
+            (VelocityPlayerToBall(), 1.0),
+            (VelocityBallToGoal(attacked=True), 1.0),  # offense: ball -> opponent goal
+            (VelocityBallToGoal(attacked=False), -1.0),  # defense: punish ball -> own goal
+            (GoalReward(), 5.0),
+        ),
+        GoalCondition(),
+        TimeoutCondition(STEP_LIMIT),
+        KickoffMutator(),
+    )
+
+
 @torch.no_grad()
 def evaluate_vs(model, opponent="chase", n_envs=256, steps=400, seed=123, jiggle=CHASE_JIGGLE, stadium=None):
     """Policy=RED (idx 0), opponent=BLUE (idx 1). Returns (red_goals, blue_goals)."""
     rng = np.random.default_rng(seed)
-    env = make_default_env(n_envs, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP, stadium=stadium)
+    env = make_env(n_envs, stadium=stadium)
     obs = env.reset()  # (n, 2, od)
     rg = bg = 0
     for _ in range(steps):
@@ -194,7 +227,7 @@ def evaluate_vs(model, opponent="chase", n_envs=256, steps=400, seed=123, jiggle
 
 
 def main():
-    env = make_default_env(N_ENVS, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP)
+    env = make_env(N_ENVS)
     obs_dim = env.obs_dim
     B = N_ENVS  # one learner per env
     logger.info(
