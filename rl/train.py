@@ -1,15 +1,16 @@
-"""Self-play PPO on the headless Rust core — trains a 1v1 Haxball policy.
+"""Self-play... no — train the policy against a CHASE BOT on the headless core.
 
-Simple shared-policy self-play (both teams = same net), exactly like the WazBot
-SB3 setup that worked in ~10 min — but on the vectorized Rust core instead of 8
-Ursina games. Rewards are WazBot's CombinedReward (VelocityPlayerToBall +
-VelocityBallToGoal), computed in Rust; tick_skip=8 (~7.5 decisions/s).
+The learner plays a scripted chase bot (moves at the ball + kicks, with angular
+jiggle so it isn't on-rails). That forces real possession contests instead of the
+"just shove the ball right" behaviour you get vs random/static. The learner is put
+on RED in half the envs and BLUE in the other half, so one net becomes strong on
+both sides (the obs is goal-relative/side-aware -> no per-team mirroring).
 
-The obs is goal-relative/side-aware (Rust), so one net plays red & blue
-symmetrically — no per-team mirroring (the bug class that breaks old HaxballGym).
+Rewards = WazBot's CombinedReward (VelocityPlayerToBall + VelocityBallToGoal),
+in Rust; tick_skip=8; gamma from a 5s half-life. Vanilla PPO (CleanRL-style).
 
-Run:   uv run python train.py            # a few minutes
-Saves: rl/checkpoints/model.pt (best vs-random checkpoint)
+Run:   uv run python train.py
+Saves: rl/checkpoints/model.pt = best-vs-chase checkpoint
 """
 import json
 import math
@@ -22,15 +23,17 @@ import torch.nn as nn
 from torch.distributions import Categorical
 
 import haxball_core as hc
+from opponents import chase_bins
 
 N_ENVS = 512
-STEP_LIMIT = 2000            # physics ticks per episode (~33s at 60fps)
-TICK_SKIP = 8               # physics ticks per decision -> 7.5 decisions/s
-T = 64                      # decisions per rollout
-TOTAL_ITERS = int(os.environ.get("ITERS", 200))
+STEP_LIMIT = 2000
+TICK_SKIP = 8
+T = 64
+TOTAL_ITERS = int(os.environ.get("ITERS", 250))
+CHASE_JIGGLE = float(os.environ.get("JIGGLE", 0.30))
 HALF_LIFE_S = 5.0
 FPS = 60 / TICK_SKIP
-GAMMA = math.exp(math.log(0.5) / (FPS * HALF_LIFE_S))  # WazBot's half-life gamma
+GAMMA = math.exp(math.log(0.5) / (FPS * HALF_LIFE_S))
 LAM = 0.95
 CLIP, EPOCHS, N_MB = 0.2, 4, 8
 LR = 3e-4
@@ -80,7 +83,7 @@ class Policy(nn.Module):
 
 
 @torch.no_grad()
-def evaluate_vs(model, opponent="random", n_envs=256, steps=400, seed=123):
+def evaluate_vs(model, opponent="chase", n_envs=256, steps=400, seed=123, jiggle=CHASE_JIGGLE):
     """Policy=RED (idx 0), opponent=BLUE (idx 1). Returns (red_goals, blue_goals)."""
     rng = np.random.default_rng(seed)
     env = hc.VecEnv(n_envs, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP)
@@ -88,12 +91,12 @@ def evaluate_vs(model, opponent="random", n_envs=256, steps=400, seed=123):
     rg = bg = 0
     for _ in range(steps):
         bins = model.act(torch.as_tensor(obs, dtype=torch.float32, device=DEVICE))[0].cpu().numpy()
-        if opponent == "random":
+        if opponent == "chase":
+            blue = chase_bins(obs[1::2], rng, jiggle=jiggle)
+        elif opponent == "random":
             blue = np.stack([rng.integers(0, 3, n_envs), rng.integers(0, 3, n_envs), rng.integers(0, 2, n_envs)], 1)
-        elif opponent == "static":
+        else:  # static
             blue = np.tile([1, 1, 0], (n_envs, 1))
-        else:
-            blue = bins[1::2]
         ab = np.empty((n_envs * 2, 3), dtype=np.int64)
         ab[0::2] = bins[0::2]; ab[1::2] = blue
         obs, rew, done = env.step(decode(ab, n_envs, 2))
@@ -108,12 +111,19 @@ def evaluate_vs(model, opponent="random", n_envs=256, steps=400, seed=123):
 def main():
     env = hc.VecEnv(N_ENVS, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP)
     obs_dim = env.obs_dim
-    B = N_ENVS * 2
-    print(f"device={DEVICE} obs_dim={obs_dim} B={B} gamma={GAMMA:.4f} tick_skip={TICK_SKIP} iters={TOTAL_ITERS}")
+    B = N_ENVS  # one learner per env
+    print(f"device={DEVICE} obs_dim={obs_dim} B={B} gamma={GAMMA:.4f} jiggle={CHASE_JIGGLE} iters={TOTAL_ITERS}")
+
+    # learner side: RED (idx 0) in first half of envs, BLUE (idx 1) in the rest
+    learner_idx = np.zeros(N_ENVS, dtype=np.int64); learner_idx[N_ENVS // 2:] = 1
+    rows = np.arange(N_ENVS) * 2
+    learner_rows = rows + learner_idx
+    opp_rows = rows + (1 - learner_idx)
 
     model = Policy(obs_dim).to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
-    obs = env.reset().reshape(B, obs_dim)
+    obs = env.reset().reshape(N_ENVS * 2, obs_dim)
+    chase_rng = np.random.default_rng(2024)
 
     S_obs = torch.zeros(T, B, obs_dim, device=DEVICE)
     S_bins = torch.zeros(T, B, 3, dtype=torch.long, device=DEVICE)
@@ -126,18 +136,23 @@ def main():
     t0 = time.perf_counter(); total = 0
     for it in range(1, TOTAL_ITERS + 1):
         for t in range(T):
-            ot = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)
+            lo = torch.as_tensor(obs[learner_rows], dtype=torch.float32, device=DEVICE)
             with torch.no_grad():
-                bins, logp, val = model.act(ot)
-            S_obs[t] = ot; S_bins[t] = bins; S_logp[t] = logp; S_val[t] = val
-            obs, rew, done = env.step(decode(bins.cpu().numpy(), N_ENVS, 2))
-            obs = obs.reshape(B, obs_dim)
-            S_rew[t] = torch.as_tensor(rew.reshape(B), device=DEVICE)
-            S_done[t] = torch.as_tensor(np.repeat(done.astype(np.float32), 2), device=DEVICE)
+                bins, logp, val = model.act(lo)
+            S_obs[t] = lo; S_bins[t] = bins; S_logp[t] = logp; S_val[t] = val
+
+            chase = chase_bins(obs[opp_rows], chase_rng, jiggle=CHASE_JIGGLE)
+            full = np.empty((N_ENVS * 2, 3), dtype=np.int64)
+            full[learner_rows] = bins.cpu().numpy()
+            full[opp_rows] = chase
+            nobs, rew, done = env.step(decode(full, N_ENVS, 2))
+            obs = nobs.reshape(N_ENVS * 2, obs_dim)
+            S_rew[t] = torch.as_tensor(rew.reshape(N_ENVS, 2)[np.arange(N_ENVS), learner_idx], device=DEVICE)
+            S_done[t] = torch.as_tensor(done.astype(np.float32), device=DEVICE)
             total += N_ENVS
 
         with torch.no_grad():
-            last_val = model(torch.as_tensor(obs, dtype=torch.float32, device=DEVICE))[3]
+            last_val = model(torch.as_tensor(obs[learner_rows], dtype=torch.float32, device=DEVICE))[3]
         adv = torch.zeros(T, B, device=DEVICE); lastgae = torch.zeros(B, device=DEVICE)
         for t in reversed(range(T)):
             nnt = 1.0 - S_done[t]
@@ -164,19 +179,20 @@ def main():
                 nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD); opt.step()
 
         if it % 10 == 0 or it == TOTAL_ITERS:
-            rg, bg = evaluate_vs(model, "random", 256, 400)
+            cg, cb = evaluate_vs(model, "chase", 256, 400)
             sps = total / (time.perf_counter() - t0)
             tag = ""
-            if rg >= best:
-                best = rg
+            net = cg - cb
+            if net >= best:
+                best = net
                 torch.save(model.state_dict(), os.path.join(CKPT_DIR, "model.pt"))
                 json.dump({"obs_dim": obs_dim, "n_red": 1, "n_blue": 1}, open(os.path.join(CKPT_DIR, "meta.json"), "w"))
                 tag = "  <- saved"
-            print(f"it {it:4d} | {total/1e6:5.2f}M dec | {sps/1e3:4.0f}k dec/s | vs RANDOM {rg:3d}:{bg:<3d}{tag}")
+            print(f"it {it:4d} | {total/1e6:5.2f}M dec | {sps/1e3:4.0f}k dec/s | vs CHASE {cg:3d}:{cb:<3d} (net {net:+d}){tag}")
 
-    print(f"\nbest vs-random goals: {best}")
+    print(f"\nbest net-vs-chase: {best:+d}")
     m = Policy(obs_dim); m.load_state_dict(torch.load(os.path.join(CKPT_DIR, "model.pt"), map_location=DEVICE))
-    for opp in ("static", "random"):
+    for opp in ("chase", "random", "static"):
         rg, bg = evaluate_vs(m, opp, 400, 600)
         print(f"  vs {opp:7s}: RED {rg} - {bg} BLUE")
 

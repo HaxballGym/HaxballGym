@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 import haxball_core as hc
+from opponents import chase_bins
 from render import draw_frame
 from train import Policy, decode
 
@@ -36,7 +37,9 @@ def main(opponent="self", steps=900):
     rng = np.random.default_rng(0)
     for t in range(steps):
         bins = greedy(model, obs)  # (2,3) both agents
-        if opponent == "random":
+        if opponent == "chase":
+            bins[1] = chase_bins(obs[1:2], rng)[0]
+        elif opponent == "random":
             bins[1] = [rng.integers(3), rng.integers(3), rng.integers(2)]
         elif opponent == "static":
             bins[1] = [1, 1, 0]
