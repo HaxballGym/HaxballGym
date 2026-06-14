@@ -5,6 +5,7 @@ matches as numpy arrays, so components run vectorized. Goal geometry comes from 
 stadium (the engine's `goals()`), never hardcoded — so the same obs/reward work on
 any map. See docs/design-docs/env-api.md.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,17 +20,17 @@ BLUE = 4
 @dataclass(frozen=True)
 class GameState:
     # dynamic, per step
-    ball_pos: np.ndarray     # (N, 2)    f64
-    ball_vel: np.ndarray     # (N, 2)    f64
-    player_pos: np.ndarray   # (N, P, 2) f64
-    player_vel: np.ndarray   # (N, P, 2) f64
-    team: np.ndarray         # (N, P)    i64   RED/BLUE
-    scored: np.ndarray       # (N,)      i8    -1 none, else conceding team
-    steps: np.ndarray        # (N,)      i64   physics ticks since reset
+    ball_pos: np.ndarray  # (N, 2)    f64
+    ball_vel: np.ndarray  # (N, 2)    f64
+    player_pos: np.ndarray  # (N, P, 2) f64
+    player_vel: np.ndarray  # (N, P, 2) f64
+    team: np.ndarray  # (N, P)    i64   RED/BLUE
+    scored: np.ndarray  # (N,)      i8    -1 none, else conceding team
+    steps: np.ndarray  # (N,)      i64   physics ticks since reset
     # stadium geometry (static; same for every env), straight from the engine
-    goal_p0: np.ndarray      # (G, 2)    f64   goal-line endpoints
-    goal_p1: np.ndarray      # (G, 2)    f64
-    goal_team: np.ndarray    # (G,)      i64   team that DEFENDS/concedes at each goal
+    goal_p0: np.ndarray  # (G, 2)    f64   goal-line endpoints
+    goal_p1: np.ndarray  # (G, 2)    f64
+    goal_team: np.ndarray  # (G,)      i64   team that DEFENDS/concedes at each goal
     # player physics constant
     player_max_speed: float
 
@@ -50,12 +51,12 @@ class GameState:
             match = self.goal_team[None, None, :] != self.team[:, :, None]
         else:
             match = self.goal_team[None, None, :] == self.team[:, :, None]
-        idx = np.argmax(match, axis=-1)                       # (N, P) first match
-        return self.goal_p0[idx], self.goal_p1[idx]           # (N, P, 2) each
+        idx = np.argmax(match, axis=-1)  # (N, P) first match
+        return self.goal_p0[idx], self.goal_p1[idx]  # (N, P, 2) each
 
     def goal_center(self, attacked: bool) -> np.ndarray:
         p0, p1 = self.goal_line(attacked)
-        return 0.5 * (p0 + p1)                                # (N, P, 2)
+        return 0.5 * (p0 + p1)  # (N, P, 2)
 
 
 def closest_on_line(p: np.ndarray, v: np.ndarray, w: np.ndarray) -> np.ndarray:

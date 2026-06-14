@@ -2,16 +2,18 @@
 
 Run:  uv run python render_demo.py
 """
+
 import json
 import os
 
 import numpy as np
 import torch
-
-import haxball_core as hc
+from loguru import logger
 from opponents import chase_bins
 from render import draw_frame
-from train import Policy, decode
+from train import Policy
+
+from haxballgym import RED, DefaultObs, DiscreteAction, TransitionEngine
 
 HERE = os.path.dirname(__file__)
 
@@ -31,9 +33,11 @@ def main(opponent="self", steps=900):
     model.load_state_dict(torch.load(os.path.join(HERE, "checkpoints/model.pt"), map_location="cpu"))
     model.eval()
 
-    env = hc.VecEnv(1, 1, 1, step_limit=100000)
-    obs = env.reset().reshape(2, -1)
-    frames = []
+    eng = TransitionEngine(1, 1, 1, step_limit=100000)
+    obs_b, act_p = DefaultObs(), DiscreteAction()
+    state = eng.reset()
+    obs = obs_b.build_obs(state).reshape(2, -1)
+    frames, score = [], [0, 0]  # [red, blue]
     rng = np.random.default_rng(0)
     for t in range(steps):
         bins = greedy(model, obs)  # (2,3) both agents
@@ -43,22 +47,27 @@ def main(opponent="self", steps=900):
             bins[1] = [rng.integers(3), rng.integers(3), rng.integers(2)]
         elif opponent == "static":
             bins[1] = [1, 1, 0]
-        acts = decode(bins, 1, 2)
-        obs, rew, done = env.step(acts)
-        obs = obs.reshape(2, -1)
+        state = eng.step(act_p.parse_actions(bins[None]))
+        conceded = int(state.scored[0])
+        if conceded != -1:  # red concedes -> blue scored, & vice-versa
+            score[1 if conceded == RED else 0] += 1
+            eng.reset_mask(np.array([True]))
+            state = eng.snapshot()
+        obs = obs_b.build_obs(state).reshape(2, -1)
         if t % 2 == 0:
-            bx, by, *_ = env.ball_state(0)
-            players = []
-            for k in range(2):
-                px, py, _, _, team = env.player_state(0, k)
-                players.append((px, py, int(team)))
-            frames.append(draw_frame((bx, by), players, env.scores(0)))
+            ball = tuple(state.ball_pos[0])
+            players = [
+                (state.player_pos[0, k, 0], state.player_pos[0, k, 1], int(state.team[0, k]))
+                for k in range(2)
+            ]
+            frames.append(draw_frame(ball, players, tuple(score)))
     out = os.path.join(HERE, "demo.gif")
     frames[0].save(out, save_all=True, append_images=frames[1:], duration=40, loop=0)
     frames[len(frames) // 3].save(os.path.join(HERE, "frame.png"))
-    print(f"saved {out} ({len(frames)} frames), frame.png, final score {env.scores(0)}")
+    logger.success("saved {} ({} frames), frame.png, final score {}", out, len(frames), tuple(score))
 
 
 if __name__ == "__main__":
     import sys
+
     main(sys.argv[1] if len(sys.argv) > 1 else "self")

@@ -17,5 +17,23 @@ haxball-core = { workspace = true }
 haxballgym = { workspace = true }
 haxballgym-rl = { workspace = true }
 
+[dependency-groups]
+dev = [
+    "ruff>=0.15.17",
+    "ty>=0.0.49",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = [".venv", "rust/*/target"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E741"]   # ambiguous var names (l/I) — fine in math code
+
+[tool.ty.environment]
+python-version = "3.12"
+
 [tool.uv]
 package = false         # the repo root is the workspace, not a built package

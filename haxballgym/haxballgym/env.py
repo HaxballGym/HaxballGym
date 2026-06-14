@@ -4,6 +4,7 @@
 Done envs auto-reset (gym-style): rewards are computed on the terminal state, then
 the env is reset and the returned obs is the fresh post-reset observation.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -62,8 +63,13 @@ class Env:
     # --- gym loop ---
     def reset(self) -> np.ndarray:
         state = self.state_mutator.reset_all(self.engine)
-        for c in (self.obs_builder, self.action_parser, self.reward_fn,
-                  self.termination_cond, self.truncation_cond):
+        for c in (
+            self.obs_builder,
+            self.action_parser,
+            self.reward_fn,
+            self.termination_cond,
+            self.truncation_cond,
+        ):
             c.reset(state)
         self.prev_state = state
         return self.obs_builder.build_obs(state)
@@ -72,28 +78,35 @@ class Env:
         engine_actions = self.action_parser.parse_actions(actions)
         state = self.engine.step(engine_actions)
 
-        terminated = self.termination_cond.is_done(state)          # (N,)
-        truncated = self.truncation_cond.is_done(state)            # (N,)
+        terminated = self.termination_cond.is_done(state)  # (N,)
+        truncated = self.truncation_cond.is_done(state)  # (N,)
         rewards = self.reward_fn.get_rewards(state, self.prev_state, terminated, truncated)
 
         done = terminated | truncated
         if done.any():
             self.state_mutator.reset_mask(self.engine, done)
-            state = self.engine.snapshot()                         # refreshed post-reset
+            state = self.engine.snapshot()  # refreshed post-reset
 
         obs = self.obs_builder.build_obs(state)
         self.prev_state = state
         return obs, rewards, terminated, truncated
 
 
-def make_default_env(n_envs: int, n_red: int = 1, n_blue: int = 1,
-                     step_limit: int = 2000, tick_skip: int = 8,
-                     goal_weight: float = 5.0, stadium: str | None = None) -> Env:
+def make_default_env(
+    n_envs: int,
+    n_red: int = 1,
+    n_blue: int = 1,
+    step_limit: int = 2000,
+    tick_skip: int = 8,
+    goal_weight: float = 5.0,
+    stadium: str | None = None,
+) -> Env:
     """The current baseline 1v1 setup: WazBot's CombinedReward, DefaultObs,
     discrete actions, goal-or-timeout episodes. Swap any piece to experiment.
     `stadium` picks the map (bundled name or .hbs path); None = built-in classic."""
-    engine = TransitionEngine(n_envs, n_red, n_blue, step_limit=step_limit,
-                              tick_skip=tick_skip, stadium=stadium)
+    engine = TransitionEngine(
+        n_envs, n_red, n_blue, step_limit=step_limit, tick_skip=tick_skip, stadium=stadium
+    )
     return Env(
         engine=engine,
         obs_builder=DefaultObs(),

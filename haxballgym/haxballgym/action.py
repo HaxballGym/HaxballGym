@@ -1,4 +1,5 @@
 """Action parsers. Batched: `parse_actions(policy_actions) -> engine (N, P, 3)`."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

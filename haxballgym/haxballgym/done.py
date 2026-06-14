@@ -1,6 +1,7 @@
 """Done conditions. Batched: `is_done(state) -> (N,) bool`. Termination (a real
 terminal, e.g. a goal) and truncation (a timeout) are kept separate, as in RLGym.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

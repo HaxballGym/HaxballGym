@@ -4,6 +4,7 @@ Physics only. It steps N matches in one call and hands back a `GameState`; it ha
 no idea what an observation or a reward is. (RLGym's `TransitionEngine`, but the
 engine *is* the batch instead of one match per process.)
 """
+
 from __future__ import annotations
 
 import haxball_core as hc
@@ -13,19 +14,33 @@ from .state import GameState
 
 
 class TransitionEngine:
-    def __init__(self, n_envs: int, n_red: int = 1, n_blue: int = 1,
-                 step_limit: int = 2000, tick_skip: int = 8, stadium: str | None = None):
+    def __init__(
+        self,
+        n_envs: int,
+        n_red: int = 1,
+        n_blue: int = 1,
+        step_limit: int = 2000,
+        tick_skip: int = 8,
+        stadium: str | None = None,
+    ):
         if stadium is None:
             self._e = hc.VecEnv(n_envs, n_red, n_blue, step_limit=step_limit, tick_skip=tick_skip)
         else:
             from .stadium import stadium_text
-            self._e = hc.VecEnv.from_hbs(stadium_text(stadium), n_envs, n_red, n_blue,
-                                         step_limit=step_limit, tick_skip=tick_skip)
+
+            self._e = hc.VecEnv.from_hbs(
+                stadium_text(stadium),
+                n_envs,
+                n_red,
+                n_blue,
+                step_limit=step_limit,
+                tick_skip=tick_skip,
+            )
         self.stadium = stadium or "classic"
         self.n_envs = self._e.n_envs
         self.n_players = self._e.n_players
         self.player_max_speed = self._e.player_max_speed
-        self._teams = self._e.teams()                       # (N, P), static
+        self._teams = self._e.teams()  # (N, P), static
         self._goal_p0, self._goal_p1, self._goal_team = self._e.goals()  # stadium geometry
         self._no_goal = np.full(self.n_envs, -1, dtype=np.int8)
 
@@ -50,8 +65,15 @@ class TransitionEngine:
     def _state(self, scored: np.ndarray) -> GameState:
         bp, bv, pp, pv, st = self._e.snapshot()
         return GameState(
-            ball_pos=bp, ball_vel=bv, player_pos=pp, player_vel=pv,
-            team=self._teams, scored=scored, steps=st,
-            goal_p0=self._goal_p0, goal_p1=self._goal_p1, goal_team=self._goal_team,
+            ball_pos=bp,
+            ball_vel=bv,
+            player_pos=pp,
+            player_vel=pv,
+            team=self._teams,
+            scored=scored,
+            steps=st,
+            goal_p0=self._goal_p0,
+            goal_p1=self._goal_p1,
+            goal_team=self._goal_team,
             player_max_speed=self.player_max_speed,
         )

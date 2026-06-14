@@ -5,16 +5,17 @@ Controls:  Arrow keys = move,  X or Space = kick.   Esc/close = quit.
 Run:  uv run python play.py
 (Needs a display; run it locally on your Mac, not over SSH.)
 """
+
 import json
 import os
 
 import numpy as np
 import pygame
 import torch
-
-import haxball_core as hc
 from render import H, W, w2i
-from train import Policy, decode
+from train import Policy
+
+from haxballgym import make_default_env
 
 HERE = os.path.dirname(__file__)
 
@@ -38,8 +39,9 @@ def main():
     model.load_state_dict(torch.load(os.path.join(HERE, "checkpoints/model.pt"), map_location="cpu"))
     model.eval()
 
-    env = hc.VecEnv(1, 1, 1, step_limit=100000)
-    obs = env.reset().reshape(2, -1)
+    env = make_default_env(1, 1, 1, step_limit=100000)
+    obs = env.reset()  # (1, 2, obs_dim)
+    you = mdl = 0
 
     pygame.init()
     screen = pygame.display.set_mode((W, H))
@@ -54,10 +56,14 @@ def main():
         keys = pygame.key.get_pressed()
 
         bins = np.empty((2, 3), dtype=np.int64)
-        bins[0] = human_bins(keys)               # player 0 = RED = human
-        bins[1] = model_action(model, obs[1])    # player 1 = BLUE = model
-        obs, rew, done = env.step(decode(bins, 1, 2))
-        obs = obs.reshape(2, -1)
+        bins[0] = human_bins(keys)  # player 0 = RED = human
+        bins[1] = model_action(model, obs[0, 1])  # player 1 = BLUE = model
+        obs, rew, term, trunc = env.step(bins[None])  # (1, 2, 3)
+        if rew[0, 0] > 1.0:
+            you += 1  # red (you) scored
+        elif rew[0, 0] < -1.0:
+            mdl += 1
+        state = env.prev_state  # GameState (post auto-reset)
 
         # draw
         screen.fill((123, 140, 90))
@@ -65,14 +71,16 @@ def main():
         pygame.draw.line(screen, (199, 230, 189), w2i(0, 170), w2i(0, -170), 2)
         for gx, col in [(-370, (255, 120, 120)), (370, (120, 150, 255))]:
             pygame.draw.line(screen, col, w2i(gx, 64), w2i(gx, -64), 4)
-        bx, by, *_ = env.ball_state(0)
+        bx, by = state.ball_pos[0]
         for k in range(2):
-            px, py, _, _, team = env.player_state(0, k)
-            col = (229, 110, 86) if int(team) == 2 else (86, 137, 229)
+            px, py = state.player_pos[0, k]
+            col = (229, 110, 86) if int(state.team[0, k]) == 2 else (86, 137, 229)
             pygame.draw.circle(screen, col, w2i(px, py), 15)
         pygame.draw.circle(screen, (240, 240, 240), w2i(bx, by), 10)
-        r, b = env.scores(0)
-        screen.blit(font.render(f"YOU {r} - {b} MODEL   (arrows move, X/space kick)", True, (255, 255, 255)), (12, 8))
+        screen.blit(
+            font.render(f"YOU {you} - {mdl} MODEL   (arrows move, X/space kick)", True, (255, 255, 255)),
+            (12, 8),
+        )
         pygame.display.flip()
         clock.tick(60)
 

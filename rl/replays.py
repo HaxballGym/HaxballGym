@@ -35,9 +35,12 @@ yields (frame, player_idx, input_mask), `build_bc_dataset()` re-simulates throug
 the core and writes the BC dataset.
 --------------------------------------------------------------------------------
 """
+
 import struct
-import zlib
 import zipfile
+import zlib
+
+from loguru import logger
 
 # Haxball input bitmask -> our (dx, dy, kick) bins {0,1,2},{0,1,2},{0,1}
 UP, DOWN, LEFT, RIGHT, KICK = 4, 1, 2, 8, 16
@@ -88,6 +91,7 @@ def parse_events(stream: bytes):
 
 if __name__ == "__main__":
     import sys
+
     zp = sys.argv[1] if len(sys.argv) > 1 else "/Users/jeremyfraoua/Downloads/1v1_recs.zip"
     n = 0
     tot_frames = 0
@@ -95,8 +99,10 @@ if __name__ == "__main__":
         n += 1
         tot_frames += frames
         if n <= 3:
-            print(f"{name[:40]:40s} v{ver} frames={frames} stream={len(stream)}B")
+            logger.info(f"{name[:40]:40s} v{ver} frames={frames} stream={len(stream)}B")
         if n >= 500:
             break
-    print(f"\ndecoded {n} replays, ~{tot_frames} frames "
-          f"(~{tot_frames/n:.0f} frames/game). Container+DEFLATE OK across the set.")
+    logger.info(
+        f"\ndecoded {n} replays, ~{tot_frames} frames "
+        f"(~{tot_frames / n:.0f} frames/game). Container+DEFLATE OK across the set."
+    )

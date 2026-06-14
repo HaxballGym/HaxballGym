@@ -3,6 +3,7 @@ kickoff layout is built in Rust, so a mutator delegates the reset to the engine.
 This is the extension point for custom resets (random positions, scenarios, …),
 which will land once the engine grows a `set_state`.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

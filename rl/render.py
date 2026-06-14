@@ -3,6 +3,7 @@
 World coords: x in [-420,420], y in [-200,200], y up. Image y is flipped.
 Used by render_demo.py (GIF proof) and as the reference for play.py's pygame draw.
 """
+
 from PIL import Image, ImageDraw
 
 W, H = 860, 440
@@ -29,11 +30,13 @@ def draw_frame(ball, players, score=(0, 0)):
         d.ellipse([w2i(gx - 6, GOAL_HALF + 6), w2i(gx + 6, GOAL_HALF - 6)], fill=col)
         d.ellipse([w2i(gx - 6, -GOAL_HALF + 6), w2i(gx + 6, -GOAL_HALF - 6)], fill=col)
     # players
-    for (x, y, team) in players:
+    for x, y, team in players:
         col = (229, 110, 86) if team == 2 else (86, 137, 229)
         d.ellipse([w2i(x - 15, y + 15), w2i(x + 15, y - 15)], fill=col, outline=(0, 0, 0), width=2)
     # ball
     bx, by = ball
-    d.ellipse([w2i(bx - 10, by + 10), w2i(bx + 10, by - 10)], fill=(240, 240, 240), outline=(20, 20, 20), width=2)
+    d.ellipse(
+        [w2i(bx - 10, by + 10), w2i(bx + 10, by - 10)], fill=(240, 240, 240), outline=(20, 20, 20), width=2
+    )
     d.text((12, 10), f"RED {score[0]} - {score[1]} BLUE", fill=(255, 255, 255))
     return img

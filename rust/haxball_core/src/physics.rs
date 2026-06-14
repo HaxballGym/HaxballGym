@@ -106,8 +106,17 @@ pub fn disc_disc(
         let normal_velocity = dot(relative_velocity, normal);
         if normal_velocity < 0.0 {
             let bouncing_factor = -(1.0 + ba * bb);
-            va = add(va, scale(normal, normal_velocity * bouncing_factor * mass_factor));
-            vb = sub(vb, scale(normal, normal_velocity * bouncing_factor * (1.0 - mass_factor)));
+            va = add(
+                va,
+                scale(normal, normal_velocity * bouncing_factor * mass_factor),
+            );
+            vb = sub(
+                vb,
+                scale(
+                    normal,
+                    normal_velocity * bouncing_factor * (1.0 - mass_factor),
+                ),
+            );
         }
     }
     (pa, pb, va, vb)
@@ -256,6 +265,7 @@ pub struct Disc {
     pub gravity: Vec2,
     pub cgroup: i64,
     pub cmask: i64,
+    #[allow(dead_code)] // descriptive flag set by constructors; not read in the hot loop
     pub is_player: bool,
     // player-only params (unused for ball / posts)
     pub accel: f64,
@@ -396,7 +406,12 @@ impl World {
         let mut discs = Vec::new();
         discs.push(Disc::ball());
         // 4 goalposts (classic.hbs discs).
-        for p in [[-370.0, 64.0], [-370.0, -64.0], [370.0, 64.0], [370.0, -64.0]] {
+        for p in [
+            [-370.0, 64.0],
+            [-370.0, -64.0],
+            [370.0, 64.0],
+            [370.0, -64.0],
+        ] {
             discs.push(Disc::goalpost(p));
         }
         let first_player = discs.len();
@@ -443,8 +458,16 @@ impl World {
         ];
 
         let goals = vec![
-            Goal { p0: [-370.0, 64.0], p1: [-370.0, -64.0], team: flag::RED },
-            Goal { p0: [370.0, 64.0], p1: [370.0, -64.0], team: flag::BLUE },
+            Goal {
+                p0: [-370.0, 64.0],
+                p1: [-370.0, -64.0],
+                team: flag::RED,
+            },
+            Goal {
+                p0: [370.0, 64.0],
+                p1: [370.0, -64.0],
+                team: flag::BLUE,
+            },
         ];
 
         let n_players = n_red + n_blue;
@@ -475,7 +498,10 @@ impl World {
         let mut red_i = 0usize;
         let mut blue_i = 0usize;
         for k in 0..self.n_players {
-            let (team, fp) = (self.discs[self.first_player + k].team, self.first_player + k);
+            let (team, fp) = (
+                self.discs[self.first_player + k].team,
+                self.first_player + k,
+            );
             let d = &mut self.discs[fp];
             d.vel = [0.0, 0.0];
             if team == flag::RED {
@@ -496,6 +522,7 @@ impl World {
 
     /// One physics tick. `actions` is [n_players][3] = (dx, dy, kick).
     /// Returns Some(scoring_team_flag) if a goal was scored this tick.
+    #[allow(clippy::needless_range_loop)] // k indexes discs/actions/kick_cancel in lockstep
     pub fn step(&mut self, actions: &[[i64; 3]]) -> Option<i64> {
         // --- player movement + kick (player_handler.resolve_movement) ---
         for k in 0..self.n_players {
@@ -539,8 +566,16 @@ impl World {
             // acceleration from input direction (normalized).
             let inp = [act[0] as f64, act[1] as f64];
             let n = norm(inp);
-            let input_dir = if n > 0.0 { [inp[0] / n, inp[1] / n] } else { [0.0, 0.0] };
-            let a = if is_kicking { self.discs[pi].kick_accel } else { self.discs[pi].accel };
+            let input_dir = if n > 0.0 {
+                [inp[0] / n, inp[1] / n]
+            } else {
+                [0.0, 0.0]
+            };
+            let a = if is_kicking {
+                self.discs[pi].kick_accel
+            } else {
+                self.discs[pi].accel
+            };
             self.discs[pi].vel = add(self.discs[pi].vel, scale(input_dir, a));
         }
 
@@ -552,7 +587,11 @@ impl World {
             let is_kicking = act[2] == 1 && !self.kick_cancel[k];
             let d = &mut self.discs[pi];
             d.pos = add(d.pos, d.vel);
-            let damping = if is_kicking { d.kick_damping } else { d.damping };
+            let damping = if is_kicking {
+                d.kick_damping
+            } else {
+                d.damping
+            };
             d.vel = scale(add(d.vel, d.gravity), damping);
         }
         // non-player discs: only the ball moves (posts have inv_mass 0 but the

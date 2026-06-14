@@ -6,6 +6,7 @@ A small angular `jiggle` perturbs its heading every tick so it does NOT travel o
 perfect straight lines — that way we can confirm the trained agent copes with a
 non-linear mover, not just an on-rails one.
 """
+
 import numpy as np
 
 # obs layout (per agent, built in Rust): [self_pos(2), self_vel(2),
@@ -17,7 +18,7 @@ NX, NY = 420.0, 200.0
 
 def chase_bins(obs, rng, jiggle=0.30, kick_dist=34.0):
     """obs = the chaser's own egocentric rows (M, obs_dim) -> bins (M,3) {0,1,2}x2,{0,1}."""
-    rx = obs[:, BALL_REL_X] * NX           # ball - player, world units
+    rx = obs[:, BALL_REL_X] * NX  # ball - player, world units
     ry = obs[:, BALL_REL_Y] * NY
     dist = np.hypot(rx, ry)
     ang = np.arctan2(ry, rx) + rng.normal(0.0, jiggle, size=len(rx))  # <- the jiggle

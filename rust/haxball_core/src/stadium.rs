@@ -53,10 +53,16 @@ impl Props {
         }
     }
     fn cgroup(&self, default: i64) -> i64 {
-        self.c_group.as_ref().map(|l| flag::parse(l)).unwrap_or(default)
+        self.c_group
+            .as_ref()
+            .map(|l| flag::parse(l))
+            .unwrap_or(default)
     }
     fn cmask(&self, default: i64) -> i64 {
-        self.c_mask.as_ref().map(|l| flag::parse(l)).unwrap_or(default)
+        self.c_mask
+            .as_ref()
+            .map(|l| flag::parse(l))
+            .unwrap_or(default)
     }
 }
 
@@ -152,13 +158,32 @@ struct RawStadium {
 // Build a World from the parsed stadium.
 // ---------------------------------------------------------------------------
 
-fn make_disc(pos: Vec2, radius: f64, inv_mass: f64, damping: f64, bcoef: f64,
-             cgroup: i64, cmask: i64) -> Disc {
+fn make_disc(
+    pos: Vec2,
+    radius: f64,
+    inv_mass: f64,
+    damping: f64,
+    bcoef: f64,
+    cgroup: i64,
+    cmask: i64,
+) -> Disc {
     Disc {
-        pos, vel: [0.0, 0.0], radius, inv_mass, damping, bcoef,
-        gravity: [0.0, 0.0], cgroup, cmask, is_player: false,
-        accel: 0.0, kick_accel: 0.0, kick_damping: 0.0, kick_strength: 0.0,
-        kickback: 0.0, team: 0,
+        pos,
+        vel: [0.0, 0.0],
+        radius,
+        inv_mass,
+        damping,
+        bcoef,
+        gravity: [0.0, 0.0],
+        cgroup,
+        cmask,
+        is_player: false,
+        accel: 0.0,
+        kick_accel: 0.0,
+        kick_damping: 0.0,
+        kick_strength: 0.0,
+        kickback: 0.0,
+        team: 0,
     }
 }
 
@@ -174,9 +199,12 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
     let bp = &s.ball_physics;
     let ball = make_disc(
         [0.0, 0.0],
-        bp.radius.unwrap_or(10.0), bp.inv_mass.unwrap_or(1.0),
-        bp.damping.unwrap_or(0.99), bp.b_coef.unwrap_or(0.5),
-        flag::BALL | flag::KICK | flag::SCORE, flag::ALL,
+        bp.radius.unwrap_or(10.0),
+        bp.inv_mass.unwrap_or(1.0),
+        bp.damping.unwrap_or(0.99),
+        bp.b_coef.unwrap_or(0.5),
+        flag::BALL | flag::KICK | flag::SCORE,
+        flag::ALL,
     );
 
     // Goalposts (the .hbs `discs`), y-flipped; disc default cGroup/cMask = ALL.
@@ -185,9 +213,12 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
         let p = d.props.over(d.tr.as_ref().and_then(|t| s.traits.get(t)));
         discs.push(make_disc(
             [d.pos[0], -d.pos[1]],
-            p.radius.unwrap_or(10.0), p.inv_mass.unwrap_or(1.0),
-            p.damping.unwrap_or(0.99), p.b_coef.unwrap_or(0.5),
-            p.cgroup(flag::ALL), p.cmask(flag::ALL),
+            p.radius.unwrap_or(10.0),
+            p.inv_mass.unwrap_or(1.0),
+            p.damping.unwrap_or(0.99),
+            p.b_coef.unwrap_or(0.5),
+            p.cgroup(flag::ALL),
+            p.cmask(flag::ALL),
         ));
     }
 
@@ -196,7 +227,8 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
     let first_player = discs.len();
     let mut push_player = |team: i64| {
         discs.push(Disc {
-            pos: [0.0, 0.0], vel: [0.0, 0.0],
+            pos: [0.0, 0.0],
+            vel: [0.0, 0.0],
             radius: pp.radius.unwrap_or(15.0),
             inv_mass: pp.inv_mass.unwrap_or(0.5),
             damping: pp.damping.unwrap_or(0.96),
@@ -224,17 +256,25 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
     let mut segments = Vec::new();
     let mut skipped_curves = 0usize;
     for seg in &s.segments {
-        let p = seg.props.over(seg.tr.as_ref().and_then(|t| s.traits.get(t)));
+        let p = seg
+            .props
+            .over(seg.tr.as_ref().and_then(|t| s.traits.get(t)));
         if p.curve.unwrap_or(0.0) != 0.0 {
             skipped_curves += 1;
             continue;
         }
         let (v0, v1) = match (verts.get(seg.v0), verts.get(seg.v1)) {
             (Some(a), Some(b)) => (*a, *b),
-            _ => return Err(format!("segment references missing vertex {} / {}", seg.v0, seg.v1)),
+            _ => {
+                return Err(format!(
+                    "segment references missing vertex {} / {}",
+                    seg.v0, seg.v1
+                ))
+            }
         };
         segments.push(Segment {
-            v0, v1,
+            v0,
+            v1,
             bcoef: p.b_coef.unwrap_or(1.0),
             bias: -p.bias.unwrap_or(0.0),
             cgroup: p.cgroup(flag::WALL),
@@ -243,27 +283,35 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
     }
 
     // Planes (normal y-flipped).
-    let planes = s.planes.iter().map(|pl| {
-        let p = pl.props.over(pl.tr.as_ref().and_then(|t| s.traits.get(t)));
-        Plane {
-            normal: [pl.normal[0], -pl.normal[1]],
-            dist: pl.dist,
-            bcoef: p.b_coef.unwrap_or(1.0),
-            cgroup: p.cgroup(flag::WALL),
-            cmask: p.cmask(flag::ALL),
-        }
-    }).collect();
+    let planes = s
+        .planes
+        .iter()
+        .map(|pl| {
+            let p = pl.props.over(pl.tr.as_ref().and_then(|t| s.traits.get(t)));
+            Plane {
+                normal: [pl.normal[0], -pl.normal[1]],
+                dist: pl.dist,
+                bcoef: p.b_coef.unwrap_or(1.0),
+                cgroup: p.cgroup(flag::WALL),
+                cmask: p.cmask(flag::ALL),
+            }
+        })
+        .collect();
 
     // Goals (no y-flip; team string -> conceding-team flag).
-    let goals = s.goals.iter().map(|g| Goal {
-        p0: g.p0,
-        p1: g.p1,
-        team: match g.team.as_str() {
-            "red" => flag::RED,
-            "blue" => flag::BLUE,
-            _ => 0,
-        },
-    }).collect();
+    let goals = s
+        .goals
+        .iter()
+        .map(|g| Goal {
+            p0: g.p0,
+            p1: g.p1,
+            team: match g.team.as_str() {
+                "red" => flag::RED,
+                "blue" => flag::BLUE,
+                _ => 0,
+            },
+        })
+        .collect();
 
     let n_players = n_red + n_blue;
     let mut w = World {
