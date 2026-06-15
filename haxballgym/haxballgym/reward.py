@@ -195,10 +195,7 @@ class TouchVelocityToGoal(RewardFunction):
         self.scale = scale
 
     def get_rewards(self, state, prev, terminated, truncated):
-        touching = (
-            np.linalg.norm(state.ball_pos[:, None, :] - state.player_pos, axis=-1)
-            < self.contact_dist
-        )
+        touching = np.linalg.norm(state.ball_pos[:, None, :] - state.player_pos, axis=-1) < self.contact_dist
         return (self.vbg.get_rewards(state, prev, terminated, truncated) * touching * self.scale).astype(
             np.float32
         )

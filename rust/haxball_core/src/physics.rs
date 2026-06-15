@@ -460,18 +460,18 @@ pub struct World {
     pub red_score: u32,
     pub blue_score: u32,
     pub steps: u64,
-    pub kick_flag: Vec<bool>,      // "winding up to kick", set on the kick key's rising
+    pub kick_flag: Vec<bool>, // "winding up to kick", set on the kick key's rising
     //                                edge, cleared on release or an actual kick (d.Yb)
     pub kick_held_prev: Vec<bool>, // kick key state last tick (for rising-edge detection)
     pub kick_cooldown: Vec<i64>,   // ticks of kick lockout remaining (Haxball's d.Zc)
-    pub kick_burst: Vec<i64>,     // kick burst counter, capped at kickRateLimit (d.Cc)
+    pub kick_burst: Vec<i64>,      // kick burst counter, capped at kickRateLimit (d.Cc)
     // kickRateLimit (min, rate-cost, burst-cap) = Haxball's (Gd, gd, ne). A kick needs
     // cooldown<=0 and burst>=0; after a kick: cooldown=min, burst-=cost. Default min=2.
     pub kick_rate_min: i64,
     pub kick_rate_cost: i64,
     pub kick_rate_cap: i64,
-    pub spawn_distance: f64,      // stadium spawnDistance (kickoff spread)
-    pub red_spawn: Vec<Vec2>,   // explicit spawn points (else the spawn_distance formula)
+    pub spawn_distance: f64,  // stadium spawnDistance (kickoff spread)
+    pub red_spawn: Vec<Vec2>, // explicit spawn points (else the spawn_distance formula)
     pub blue_spawn: Vec<Vec2>,
 }
 
@@ -541,12 +541,26 @@ impl World {
         segments.push(net([380.0, -64.0], [400.0, -44.0], 90.0));
         segments.push(net([400.0, 44.0], [380.0, 64.0], 90.0));
         let bar = |group| {
-            Segment::build([0.0, 75.0], [0.0, -75.0], 180.0, 0.0, 0.1, group, flag::RED | flag::BLUE)
+            Segment::build(
+                [0.0, 75.0],
+                [0.0, -75.0],
+                180.0,
+                0.0,
+                0.1,
+                group,
+                flag::RED | flag::BLUE,
+            )
         };
         segments.push(bar(flag::BLUEKO)); // curve +180, cGroup blueKO (classic.hbs)
-        // the redKO barrier is the curve=-180 twin; build it explicitly
+                                          // the redKO barrier is the curve=-180 twin; build it explicitly
         segments.push(Segment::build(
-            [0.0, 75.0], [0.0, -75.0], -180.0, 0.0, 0.1, flag::REDKO, flag::RED | flag::BLUE,
+            [0.0, 75.0],
+            [0.0, -75.0],
+            -180.0,
+            0.0,
+            0.1,
+            flag::REDKO,
+            flag::RED | flag::BLUE,
         ));
 
         // Planes (classic.hbs). ballArea planes constrain the ball top/bottom

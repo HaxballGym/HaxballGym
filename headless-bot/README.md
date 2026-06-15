@@ -18,11 +18,12 @@ HEADLESS_TOKEN=<token> node bot.js             # token from https://www.haxball.
 ```
 
 It prints a room link + password (default `bot`). Join it; you get **admin** and the
-game auto-starts. Chat commands: `!restart` `!start` `!stop` `!swap` `!help`.
+game auto-starts. Chat commands: `!start` `!stop` `!restart` `!swap` `!reload`
+(reload `policy.json` after a re-export) `!who` `!help`.
 
 Env knobs: `ROOM_NAME`, `ROOM_PASS`, `TICK_SKIP` (default 8), `FLIP_Y=1` (if the bot
 moves up/down the wrong way).
 
-> The bot is only as good as the checkpoint. The current one is weak (over-aggressive,
-> barely beats random) — the integration is correct; a stronger policy (BC from the
-> human replays, defensive reward) is the win.
+> The bot is only as good as the checkpoint. The bundled `policy.json` is the example
+> bot from `rl/train.py` (a few hundred iterations) — train longer and re-export to
+> field a stronger one. The integration itself is exact (same physics, same obs).

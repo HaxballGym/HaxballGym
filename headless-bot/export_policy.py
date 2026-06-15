@@ -1,8 +1,8 @@
 """Export a trained PPO policy to policy.json so the Node bot can run the forward pass
 without torch.
 
-  uv run headless-bot/export_policy.py                       # champion (checkpoints/model.pt)
-  uv run headless-bot/export_policy.py v11_sota_reward       # a run dir (uses model_final.pt)
+  uv run headless-bot/export_policy.py                       # default (rl/checkpoints/model.pt)
+  uv run headless-bot/export_policy.py my_run                # a run dir (uses model_final.pt)
   uv run headless-bot/export_policy.py rl/checkpoints/x.pt   # an explicit .pt (meta inferred)
 
 Only the default 256×2, obs_dim-16 DefaultObs arch is supported by bot.js (trunk.0/trunk.2)."""
@@ -20,7 +20,9 @@ CKPT = HERE.parent / "rl" / "checkpoints"
 def resolve(arg: str | None) -> tuple[Path, dict]:
     """Return (state_dict_path, meta). `arg` may be None (champion), a run-dir name, or a .pt."""
     if arg is None:
-        return CKPT / "model.pt", json.loads((CKPT / "meta.json").read_text())
+        meta_path = CKPT / "meta.json"  # optional — obs_dim/depth are inferred from the weights
+        meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+        return CKPT / "model.pt", meta
     p = Path(arg)
     if p.suffix == ".pt":  # explicit checkpoint file
         sd_path = p if p.is_absolute() else (HERE.parent / p)

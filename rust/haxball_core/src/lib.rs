@@ -10,8 +10,7 @@
 
 use numpy::ndarray::{Array2, Array3};
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray1, PyReadonlyArray2,
-    PyReadonlyArray3,
+    IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -436,7 +435,10 @@ impl VecEnv {
                 let t = [-p.normal[1], p.normal[0]]; // direction along the plane
                 let l = 3000.0;
                 segs.extend_from_slice(&[
-                    c[0] - t[0] * l, c[1] - t[1] * l, c[0] + t[0] * l, c[1] + t[1] * l,
+                    c[0] - t[0] * l,
+                    c[1] - t[1] * l,
+                    c[0] + t[0] * l,
+                    c[1] + t[1] * l,
                 ]);
                 m += 1;
             }

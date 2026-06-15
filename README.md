@@ -1,8 +1,8 @@
 # HaxballGym
 
 A headless, vectorized **Haxball** simulator for reinforcement learning — the
-"RocketSim/RLGym for Haxball" — plus the training code to reach superhuman play and
-the tools to play your bot back in the real browser game.
+"RocketSim/RLGym for Haxball" — plus a composable training env, runnable examples,
+and the tools to play your bot back in the real browser game.
 
 The physics is a faithful Rust port of Haxball's, **verified bit-for-bit to 1e-9**,
 stepped in batches of thousands of matches in parallel. That is ~1,000–10,000×
@@ -22,8 +22,8 @@ is now reachable on a single machine.
 
 ## Quickstart
 
-This is a **uv workspace** (`rust/haxball_core` + `rl`). One command builds the Rust
-core and installs everything into `.venv`:
+This is a **uv workspace** (`rust/haxball_core` + `haxballgym` + `rl`). One command
+builds the Rust core and installs everything into `.venv`:
 
 ```bash
 uv sync                                          # builds core + installs deps + uv.lock

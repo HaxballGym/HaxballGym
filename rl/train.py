@@ -36,12 +36,12 @@ DEVICE = torch.device("cpu")  # tiny nets + a CPU-resident sim → CPU is fastes
 HERE = os.path.dirname(__file__)
 
 # ── hyper-parameters (sane defaults; tweak via CLI) ───────────────────────────────
-N_ENVS = 512        # parallel matches per rollout
-T = 64              # rollout length (policy steps) per iteration
-TICK_SKIP = 8       # physics ticks per policy decision (7.5 decisions/sec)
-GAMMA = 0.9817      # discount (~5 s half-life at this decision rate)
-LAM = 0.95          # GAE lambda
-CLIP = 0.2          # PPO clip
+N_ENVS = 512  # parallel matches per rollout
+T = 64  # rollout length (policy steps) per iteration
+TICK_SKIP = 8  # physics ticks per policy decision (7.5 decisions/sec)
+GAMMA = 0.9817  # discount (~5 s half-life at this decision rate)
+LAM = 0.95  # GAE lambda
+CLIP = 0.2  # PPO clip
 EPOCHS, N_MB = 4, 8  # PPO epochs and minibatches per iteration
 LR = 3e-4
 ENT_COEF, VF_COEF, MAX_GRAD = 0.01, 0.5, 0.5
@@ -150,13 +150,15 @@ def main():
         return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     # rollout buffers
-    S = {k: torch.zeros(T, B, *s) for k, s in
-         {"obs": (obs_dim,), "bins": (3,), "logp": (), "val": (), "rew": (), "done": ()}.items()}
+    S = {
+        k: torch.zeros(T, B, *s)
+        for k, s in {"obs": (obs_dim,), "bins": (3,), "logp": (), "val": (), "rew": (), "done": ()}.items()
+    }
     S["bins"] = S["bins"].long()
 
     obs = env.reset().reshape(P * N_ENVS, obs_dim)
     rng = np.random.default_rng(0)
-    best = -10**9
+    best = -(10**9)
 
     for it in range(1, args.iters + 1):
         frac = (it - 1) / max(1, args.iters - 1)

@@ -50,7 +50,7 @@ class Env:
         # Action stacking (Lucy-SKG): append the last `action_stack` actions to each
         # player's obs, giving the policy short-term memory of what it just did.
         self.action_stack = int(action_stack)
-        self._act_buf = None  # (N, P, action_stack*3)
+        self._act_buf: np.ndarray | None = None  # (N, P, action_stack*3)
 
     # --- spaces / shapes ---
     @property
@@ -83,9 +83,7 @@ class Env:
         self.prev_state = state
         obs = self.obs_builder.build_obs(state)
         if self.action_stack:
-            self._act_buf = np.zeros(
-                (self.n_envs, self.n_players, 3 * self.action_stack), dtype=np.float32
-            )
+            self._act_buf = np.zeros((self.n_envs, self.n_players, 3 * self.action_stack), dtype=np.float32)
             obs = np.concatenate([obs, self._act_buf], axis=-1)
         return obs
 
@@ -107,13 +105,16 @@ class Env:
         if self.action_stack:
             # roll the buffer: drop the oldest action, append this tick's (centered to
             # [-1,1] for dx/dy). The actions are in policy frame (mirror-consistent obs).
+            buf = self._act_buf
+            assert buf is not None  # initialized in reset() whenever action_stack > 0
             a = np.asarray(actions, dtype=np.float32).copy()
             a[..., 0] -= 1.0
             a[..., 1] -= 1.0
-            self._act_buf = np.concatenate([self._act_buf[..., 3:], a], axis=-1)
+            buf = np.concatenate([buf[..., 3:], a], axis=-1)
             if done.any():
-                self._act_buf[done] = 0.0  # fresh episode -> no action history
-            obs = np.concatenate([obs, self._act_buf], axis=-1)
+                buf[done] = 0.0  # fresh episode -> no action history
+            self._act_buf = buf
+            obs = np.concatenate([obs, buf], axis=-1)
         self.prev_state = state
         return obs, rewards, terminated, truncated
 

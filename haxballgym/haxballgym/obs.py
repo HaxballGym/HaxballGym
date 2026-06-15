@@ -195,8 +195,8 @@ class GeoObs(DefaultObs):
         sp_s = (np.linalg.norm(state.player_vel, axis=-1) * vc)[..., None]
         scalars = np.concatenate([d_pb, d_bw, d_bp, d_sp, sp_b, sp_s], axis=-1).astype(np.float32)
         return np.concatenate(
-            [base, lidar.astype(np.float32), slidar.astype(np.float32),
-             bounce.astype(np.float32), scalars], axis=-1
+            [base, lidar.astype(np.float32), slidar.astype(np.float32), bounce.astype(np.float32), scalars],
+            axis=-1,
         )
 
 
@@ -224,8 +224,7 @@ class SharedObs(ObsBuilder):
         # x-component column indices (for the blue mirror): the 6 base vectors + each
         # other-slot's rel_pos.x and vel.x (the present flag at +4 is never mirrored).
         self._x_idx = np.array(
-            [0, 2, 4, 6, 8, 10]
-            + [c for s in range(k_team + k_opp) for c in (12 + 5 * s, 12 + 5 * s + 2)]
+            [0, 2, 4, 6, 8, 10] + [c for s in range(k_team + k_opp) for c in (12 + 5 * s, 12 + 5 * s + 2)]
         )
 
     def obs_dim(self, n_players: int) -> int:

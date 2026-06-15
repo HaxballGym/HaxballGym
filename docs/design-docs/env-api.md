@@ -60,10 +60,11 @@ Goal geometry, `player_max_speed`, and team layout are engine truth and are read
 from the engine; obs normalization coefficients are `DefaultObs` parameters (as in
 RLGym's `DefaultObs(pos_coef=..., lin_vel_coef=...)`).
 
-## Migration
+## Where it lives
 
-The current `VecEnv` bakes obs/reward/done into `lib.rs`. We (1) add the
-state-exposing engine methods, (2) build the Python layer with defaults that
-reproduce today's obs/reward exactly (parity-tested), (3) move `train.py` onto the
-`Env`, then (4) delete the baked-in obs/reward from `lib.rs`. Steps are verifiable
-in isolation so the trainer never breaks for long.
+The split above is what ships today: the Rust core (`haxball_core`) is physics +
+batched `GameState` only, and the env components (`DefaultObs`, the reward terms,
+`DiscreteAction`, `GoalCondition`/`TimeoutCondition`, `KickoffMutator`) are plain
+vectorized numpy in `haxballgym/`. `make_default_env(...)` wires them into an `Env`
+with the defaults that reproduce the original baked-in obs/reward (parity-tested to
+the same trajectories). Swap any component without touching the core.

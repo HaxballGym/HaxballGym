@@ -70,7 +70,7 @@ def main():
         keys = pygame.key.get_pressed()
 
         bins = np.empty((2, 3), dtype=np.int64)
-        bins[0] = human_bins(keys)          # player 0 = red = you
+        bins[0] = human_bins(keys)  # player 0 = red = you
         bins[1] = model_bins(model, obs[0, 1])  # player 1 = blue = model
         obs, rew, term, trunc = env.step(bins[None])
         if rew[0, 0] > 1.0:
@@ -91,8 +91,10 @@ def main():
             col = (229, 110, 86) if int(state.team[0, k]) == 2 else (86, 137, 229)
             pygame.draw.circle(screen, col, w2i(px, py), 15)
         pygame.draw.circle(screen, (240, 240, 240), w2i(bx, by), 10)
-        screen.blit(font.render(f"YOU {you} - {mdl} MODEL   (arrows move, X/space kick)",
-                                True, (255, 255, 255)), (12, 8))
+        screen.blit(
+            font.render(f"YOU {you} - {mdl} MODEL   (arrows move, X/space kick)", True, (255, 255, 255)),
+            (12, 8),
+        )
         pygame.display.flip()
         clock.tick(60)
     pygame.quit()
