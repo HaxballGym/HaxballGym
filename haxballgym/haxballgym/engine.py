@@ -22,7 +22,11 @@ class TransitionEngine:
         step_limit: int = 2000,
         tick_skip: int = 8,
         stadium: str | None = None,
+        predict_offsets: list[int] | None = None,
     ):
+        # tick offsets at which to attach deterministic ball-trajectory prediction to each
+        # state (for a lookahead obs); None = off (no prediction computed).
+        self._predict_offsets = [int(o) for o in predict_offsets] if predict_offsets else None
         if stadium is None:
             self._e = hc.VecEnv(n_envs, n_red, n_blue, step_limit=step_limit, tick_skip=tick_skip)
         else:
@@ -104,5 +108,6 @@ class TransitionEngine:
             goal_team=self._goal_team,
             walls=self._walls,
             obstacles=self._obstacles,
+            ball_pred=(self._e.predict_ball(self._predict_offsets) if self._predict_offsets else None),
             player_max_speed=self.player_max_speed,
         )

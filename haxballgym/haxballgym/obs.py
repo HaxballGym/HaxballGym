@@ -292,3 +292,33 @@ class SharedObs(ObsBuilder):
         sgn = np.where(state.team == RED, 1.0, -1.0)[:, :, None]  # (N,P,1)
         out[..., self._x_idx] *= sgn
         return out
+
+
+class PredictObs(DefaultObs):
+    """DefaultObs + K deterministic future ball positions (relative to each player,
+    normalized, side-mirrored). Hands the policy "where the ball will be" — lookahead a
+    tiny memoryless net can't learn implicitly, and exactly what's needed to read wall/
+    corner rebounds and time interceptions. Requires the engine to attach
+    `state.ball_pred` (TransitionEngine(predict_offsets=[...]) with len == n_pred)."""
+
+    def __init__(self, n_pred: int = 3, **kw):
+        super().__init__(**kw)
+        self.n_pred = int(n_pred)
+
+    def obs_dim(self, n_players: int) -> int:
+        return super().obs_dim(n_players) + 2 * self.n_pred
+
+    def build_obs(self, state: GameState) -> np.ndarray:
+        base = super().build_obs(state)  # (N,P,base) — already x-mirrored for blue
+        n, p = state.n_envs, state.n_players
+        out = np.zeros((n, p, 2 * self.n_pred), dtype=np.float32)
+        pred = state.ball_pred  # (N, K, 2) future ball positions
+        if pred is not None:
+            pc = self.pos_coef
+            ppos = state.player_pos  # (N,P,2)
+            sx = np.where(state.team == RED, 1.0, -1.0)  # (N,P)
+            for k in range(min(self.n_pred, pred.shape[1])):
+                rel = (pred[:, None, k, :] - ppos) * pc  # (N,P,2) future ball relative to player
+                rel[..., 0] *= sx  # mirror x for blue (same frame as the base obs)
+                out[..., 2 * k : 2 * k + 2] = rel
+        return np.concatenate([base, out], axis=-1)

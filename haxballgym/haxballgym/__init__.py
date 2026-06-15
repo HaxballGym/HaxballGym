@@ -25,7 +25,7 @@ from .mutator import (
     StateMutator,
     StateSetterMutator,
 )
-from .obs import DefaultObs, GeoObs, ObsBuilder, SharedObs
+from .obs import DefaultObs, GeoObs, ObsBuilder, PredictObs, SharedObs
 from .reward import (
     AlignBallGoal,
     BallOnOpponentHalf,
@@ -58,6 +58,7 @@ __all__ = [
     "closest_on_line",
     "ObsBuilder",
     "DefaultObs",
+    "PredictObs",
     "SharedObs",
     "GeoObs",
     "ActionParser",

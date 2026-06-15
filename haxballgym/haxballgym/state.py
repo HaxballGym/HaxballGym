@@ -33,6 +33,7 @@ class GameState:
     goal_team: np.ndarray  # (G,)      i64   team that DEFENDS/concedes at each goal
     walls: np.ndarray | None = None  # (M, 4)  f64  ball-colliding walls [x0,y0,x1,y1] (raycast geometry)
     obstacles: np.ndarray | None = None  # (D, 3)  f64  static post discs [x,y,radius] (raycast obstacles)
+    ball_pred: np.ndarray | None = None  # (N, K, 2)  f64  future ball positions (deterministic prediction)
     # player physics constant
     player_max_speed: float = 0.0
 

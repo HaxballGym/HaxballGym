@@ -471,6 +471,30 @@ impl VecEnv {
             .into_pyarray_bound(py)
     }
 
+    /// Deterministic ball-trajectory prediction (players ignored): future ball positions at
+    /// the given ascending tick `offsets`, shape `(N, K, 2)`. Lets a map-agnostic obs feed the
+    /// policy "where the ball will be" — lookahead a tiny memoryless net can't learn implicitly,
+    /// and exactly what's needed to read wall/corner rebounds. Exact until a player touches it.
+    fn predict_ball<'py>(&self, py: Python<'py>, offsets: Vec<u64>) -> Bound<'py, PyArray3<f64>> {
+        let n = self.worlds.len();
+        let k = offsets.len();
+        let preds: Vec<Vec<[f64; 2]>> = self
+            .worlds
+            .par_iter()
+            .map(|w| w.predict_ball(&offsets))
+            .collect();
+        let mut out = vec![0.0f64; n * k * 2];
+        for (ei, p) in preds.iter().enumerate() {
+            for (ki, pos) in p.iter().enumerate() {
+                out[(ei * k + ki) * 2] = pos[0];
+                out[(ei * k + ki) * 2 + 1] = pos[1];
+            }
+        }
+        Array3::from_shape_vec((n, k, 2), out)
+            .unwrap()
+            .into_pyarray_bound(py)
+    }
+
     /// Pure-Rust benchmark: run `n_steps` ticks, no Python in the loop.
     fn rollout_bench(&mut self, py: Python<'_>, n_steps: u64) -> u64 {
         let n_players = self.n_players;

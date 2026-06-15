@@ -851,6 +851,104 @@ impl World {
         }
     }
 
+    /// Deterministic ball prediction: roll the ball (disc 0) forward against the STATIC
+    /// geometry (posts, planes, segments) with players ignored — i.e. where the ball goes
+    /// if no one touches it — and return its position at each ascending tick offset in
+    /// `offsets`. Replays the exact integrate + collision code of `step`/`resolve_collisions`
+    /// for the ball alone, so it's bit-faithful until a player would touch the ball; most
+    /// useful at short horizons (interception, reading wall/corner rebounds).
+    pub fn predict_ball(&self, offsets: &[u64]) -> Vec<Vec2> {
+        let mut ball = self.discs[0].clone();
+        let max_t = offsets.iter().copied().max().unwrap_or(0);
+        let mut out = Vec::with_capacity(offsets.len());
+        let mut next = 0usize;
+        for t in 1..=max_t {
+            // integrate (identical to step's ball integration)
+            ball.pos = add(ball.pos, ball.vel);
+            ball.vel = scale(add(ball.vel, ball.gravity), ball.damping);
+            if ball.inv_mass != 0.0 {
+                // ball vs static posts (discs[1..first_player]); players are skipped
+                for di in 1..self.first_player {
+                    let post = &self.discs[di];
+                    if !collides(ball.cgroup, ball.cmask, post.cgroup, post.cmask) {
+                        continue;
+                    }
+                    let (pa, _pb, va, _vb) = disc_disc(
+                        ball.pos,
+                        post.pos,
+                        ball.vel,
+                        post.vel,
+                        ball.radius,
+                        post.radius,
+                        ball.inv_mass,
+                        post.inv_mass,
+                        ball.bcoef,
+                        post.bcoef,
+                    );
+                    ball.pos = pa;
+                    ball.vel = va;
+                }
+                for p in &self.planes {
+                    if !collides(ball.cgroup, ball.cmask, p.cgroup, p.cmask) {
+                        continue;
+                    }
+                    let (pd, v) = disc_plane(
+                        ball.pos,
+                        p.normal,
+                        ball.vel,
+                        p.dist,
+                        ball.radius,
+                        ball.bcoef,
+                        p.bcoef,
+                    );
+                    ball.pos = pd;
+                    ball.vel = v;
+                }
+                for s in &self.segments {
+                    if !collides(ball.cgroup, ball.cmask, s.cgroup, s.cmask) {
+                        continue;
+                    }
+                    let hit = if s.curve != 0.0 {
+                        segment_curve(
+                            ball.pos,
+                            s.center,
+                            s.radius,
+                            s.tangent_0,
+                            s.tangent_1,
+                            s.curve,
+                        )
+                    } else {
+                        segment_no_curve(ball.pos, s.v0, s.v1)
+                    };
+                    if let Some((dist, normal)) = hit {
+                        if let Some((dist, normal)) = segment_apply_bias(s.bias, dist, normal) {
+                            let (pd, v) = segment_final(
+                                dist,
+                                normal,
+                                ball.pos,
+                                ball.vel,
+                                ball.radius,
+                                ball.bcoef,
+                                s.bcoef,
+                            );
+                            ball.pos = pd;
+                            ball.vel = v;
+                        }
+                    }
+                }
+            }
+            while next < offsets.len() && offsets[next] == t {
+                out.push(ball.pos);
+                next += 1;
+            }
+        }
+        while next < offsets.len() {
+            out.push(ball.pos); // offsets beyond max_t -> last position
+            next += 1;
+        }
+        out
+    }
+
     /// Port of game.check_goal (the two-cross-product line-crossing test).
     fn check_goal(&self, prev: Vec2, cur: Vec2) -> Option<i64> {
         for g in &self.goals {

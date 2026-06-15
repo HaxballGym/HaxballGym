@@ -67,6 +67,7 @@ class VecEnv:
     def obstacle_discs(self) -> NDArray[np.float64]: ...  # (D, 3) static post discs [x, y, radius]
     def set_player_cmask(self, mask: int) -> None: ...  # set every player disc's collision mask
     def kick_state(self) -> tuple[NDArray[np.int64], NDArray[np.int64]]: ...  # per-player kick state
+    def predict_ball(self, offsets: list[int]) -> NDArray[np.float64]: ...  # (N, K, 2) future ball pos
     def rollout_bench(self, n_steps: int) -> int: ...
 
 # fn_base.py mirrors used only by the fidelity test
