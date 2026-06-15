@@ -25,19 +25,12 @@ cleverer algorithm, is what reaches superhuman.
 │    physics.rs  collisions + integration (port of fn_base.py)  │
 │    stadium.rs  .hbs loader (serde): any map -> World          │
 └──────────────────────────────────────────────────────────────┘
-                ▲
-                │  reference only (never imported)
-┌───────────────┴─────────────────────────────────────────────┐
-│  reverse-engineering/   original Haxball source (replays,     │   JS (read-only)
-│                         headless rooms, map formats)          │
-└──────────────────────────────────────────────────────────────┘
 ```
 
 **Rule:** dependencies point downward only — `rl/` → `haxballgym` → `haxball_core`;
-the core depends on nothing above it; `reverse-engineering/` is documentation,
-imported by nobody. A change that makes a lower layer import from a higher one, or
-that runs game-engine/render code inside the core, is an architecture violation — it
-reintroduces the slowness this whole design exists to kill.
+the core depends on nothing above it. A change that makes a lower layer import from a
+higher one, or that runs game-engine/render code inside the core, is an architecture
+violation — it reintroduces the slowness this whole design exists to kill.
 
 **Obs/reward/done now live in `haxballgym`** (composable Python, batched-vectorized),
 not baked into the core. The core exposes a batched `GameState` + geometry

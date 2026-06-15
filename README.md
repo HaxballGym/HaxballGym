@@ -16,7 +16,7 @@ is now reachable on a single machine.
 | **`rust/haxball_core/`** | The physics core. Headless, `f64`, vectorized `VecEnv` (N matches via rayon). Compiles to a Python extension today, WASM next. |
 | **`haxballgym/`** | The composable env API — obs, reward, action, done, and state mutators — on top of the core (the RLGym-v2 decomposition). |
 | **`rl/`** | Runnable examples: `train.py` (PPO self-play) and `play.py` (human vs your model). |
-| **`reverse-engineering/`** | The (permissioned) original Haxball source — used to replicate the replay format, headless rooms, and map loading. |
+| **`headless-bot/`** | Host a private Haxball room and play your trained policy in the real browser game. |
 | **`docs/`** | Architecture, how-to, and design docs. **Start here:** [`docs/HOW_TO.md`](docs/HOW_TO.md). |
 | **`ARCHITECTURE.md`** | The layered architecture (read before changing structure). |
 
@@ -46,5 +46,5 @@ experiment (see `rl/README.md` for where to extend).
 
 ## Legal
 
-The contents of `reverse-engineering/` are used with the explicit permission of
-Mario Carbajal (Haxball's author) for research purposes.
+Haxball is created by Mario Carbajal. This project is an independent,
+research-oriented physics port and is not affiliated with or endorsed by him.

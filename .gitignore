@@ -132,11 +132,10 @@ recordings/
 # Replay datasets + derived artifacts (large / not source)
 data/
 *.hbr2
-reverse-engineering/replay_manifest.json
 
 # Private / not part of the public release (competitive training, strategy notes,
-# replay-corpus research). Kept local; never committed.
+# replay-corpus research, the original Haxball source). Kept local; never committed.
 wazbot/
+reverse-engineering/
 docs/design-docs/sota-from-rocket-league.md
 headless-bot/dump_replay.js
-reverse-engineering/analyze_replays.py

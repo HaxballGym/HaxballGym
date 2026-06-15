@@ -1,11 +1,10 @@
 """Read Haxball `.hbr2` replays into per-frame player inputs.
 
-This is the Python port of `reverse-engineering/recording.js` (read that for the
-prose walkthrough of the format). It exists for **behavioral cloning**: turning the
-21k human replays into `(observation, action)` pairs that pre-train the policy to
-play like a human, which PPO then finetunes (the Necto recipe). Verified end to end:
-`iter_inputs()` parses all 21,394 replays of the 1v1 dataset to the exact end of the
-buffer, ~400-1100 input changes per player per game, every mask in 0..31.
+It exists for **behavioral cloning**: turning human replays into `(observation,
+action)` pairs that pre-train the policy to play like a human, which PPO then
+finetunes (the Necto recipe). Verified end to end: `iter_inputs()` parses all 21,394
+replays of a 1v1 dataset to the exact end of the buffer, ~400-1100 input changes per
+player per game, every mask in 0..31.
 
 The format, top to bottom
 ─────────────────────────
