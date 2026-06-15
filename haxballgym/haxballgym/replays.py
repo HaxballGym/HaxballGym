@@ -32,8 +32,11 @@ import struct
 import zipfile
 import zlib
 
-# Movement/kick mask: the low 5 bits of a PlayerInput action.
-UP, DOWN, LEFT, RIGHT, KICK = 4, 1, 2, 8, 16
+# Movement/kick mask: the low 5 bits of a PlayerInput action. These are Haxball's
+# canonical key bits (verified by re-simulating replays: a player only reaches the
+# ball with this mapping). `dy` uses up=+1 because our core's y points up (the .hbs
+# loader flips Haxball's screen-down y), so pressing "up" should increase y.
+UP, DOWN, LEFT, RIGHT, KICK = 1, 2, 4, 8, 16
 
 
 def input_mask_to_bins(mask: int) -> list[int]:
@@ -143,12 +146,45 @@ def iter_inputs(body: bytes):
             yield frame, player_id, mask & 0x1F
 
 
-def read_marker_log(r: Reader):
-    """Seek-bar highlights: a count, then (cumulative-frame, kind) pairs.  game-min.js: $b.mr"""
+def iter_chat(body: bytes):
+    """Yield (frame, author_session_id, text) for every ChatMessage and Announcement.
+
+    Chat is part of the replay; the DNA ladder's ranking bot prints each match's ELO
+    here ("Versus history: … [elo: A - B]"), which is how we filter replays by skill.
+    Peeks the action type and delegates every non-text action to `read_action`."""
+    r = Reader(body)
+    read_marker_log(r)
+    read_room_state(r)
     frame = 0
+    while r.bytes_left() > 0:
+        frame += r.varint()
+        author = r.u16()
+        kind = r.data[r.pos]  # peek the type byte (read_action would consume it)
+        if kind == 0:  # ChatMessage: text, color, style, weight
+            r.u8()
+            text = r.string_var()
+            r.i32()
+            r.u8()
+            r.u8()
+            yield frame, author, text
+        elif kind == 4:  # Announcement: text
+            r.u8()
+            yield frame, author, r.string_var()
+        else:
+            read_action(r)
+
+
+def read_marker_log(r: Reader):
+    """Seek-bar highlights: a count, then (cumulative-frame, kind) pairs.  game-min.js: $b.mr
+
+    Returns the list of (frame, kind) — mostly goal highlights, handy as a ground-truth
+    timeline of when goals happened for validating a re-simulation."""
+    frame = 0
+    markers = []
     for _ in range(r.u16()):
         frame += r.varint()
-        r.u8()  # marker kind — unused
+        markers.append((frame, r.u8()))  # (cumulative frame, marker kind)
+    return markers
 
 
 def read_action_log(r: Reader):
@@ -182,13 +218,17 @@ def read_room_state(r: Reader):
         "score_limit": r.i32(),
         "time_limit": r.i32(),
     }
-    r.i16()  # three flags we don't use
-    r.u8()
-    r.u8()
+    # kickRateLimit, as the room stored it (game-min.js room-state order): burst cap,
+    # burst cost, then min (= Haxball's setKickRateLimit min/rate/burst → ne, gd, Gd).
+    room["kick_rate_cap"] = r.i16()
+    room["kick_rate_cost"] = r.u8()
+    room["kick_rate_min"] = r.u8()
     room["stadium"] = read_stadium(r)
     room["in_progress"] = r.u8() != 0
-    if room["in_progress"]:
-        read_physics_state(r)  # a live match snapshot precedes the player list
+    # When a match is live, its physics snapshot (ball + every disc) precedes the
+    # player list. We keep it so a re-simulation can be *seeded* from the recorded
+    # state instead of the kickoff — see rl/build_bc_dataset.py.
+    room["physics"] = read_physics_state(r) if room["in_progress"] else None
     room["players"] = read_list(r, read_player)
     read_team_state(r)  # red
     read_team_state(r)  # blue
@@ -210,7 +250,7 @@ def read_player(r: Reader):  # game-min.js: wa.wa (8408) — we only need sessio
     r.i16()
     r.u8()
     team = r.i8()  # 1 = red, 2 = blue, anything else = spectator
-    r.i16()  # this player's disc index
+    disc_index = r.i16()  # index of this player's disc in the physics snapshot (-1 if none)
     return {
         "numeric_id": numeric_id,
         "session": session,
@@ -218,6 +258,7 @@ def read_player(r: Reader):  # game-min.js: wa.wa (8408) — we only need sessio
         "country": country,
         "avatar": avatar,
         "team": team,
+        "disc_index": disc_index,
     }
 
 

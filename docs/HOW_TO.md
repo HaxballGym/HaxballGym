@@ -6,10 +6,11 @@ it, with enough of the *why* that you can change things safely. Read
 
 ## 0. Mental model in three sentences
 
-The physics lives in a fast headless Rust core (`rust/haxball_core`). The RL code
-(`rl/`) imports that core as a Python extension and steps thousands of matches at
-once. Nothing renders during training — rendering and human-play are separate, and
-the in-browser version comes later via WASM.
+The physics lives in a fast headless Rust core (`rust/haxball_core`). The
+`haxballgym` package wraps it in a composable env (obs / reward / action / done /
+mutators). The example training code (`rl/`) imports that env and steps thousands of
+matches at once. Nothing renders during training — human-play is separate, and the
+in-browser version comes later via WASM.
 
 ## 1. Prerequisites
 
@@ -19,8 +20,8 @@ the in-browser version comes later via WASM.
 
 ## 2. Build everything
 
-This repo is a **uv workspace** (`rust/haxball_core` + `rl`). One command compiles
-the Rust core and installs all deps into `.venv` at the repo root:
+This repo is a **uv workspace** (`rust/haxball_core` + `haxballgym` + `rl`). One
+command compiles the Rust core and installs all deps into `.venv` at the repo root:
 
 ```bash
 uv sync                          # builds haxball_core (maturin) + installs deps -> uv.lock
@@ -41,41 +42,35 @@ uv run rust/haxball_core/bench.py                 # throughput sanity check
 If `test_fidelity.py` passes, the simulator is byte-trustworthy and you can believe
 any speed numbers you measure.
 
-## 3. Train a bot (and watch it live)
+## 3. Train a bot
 
 ```bash
-uv run rl/train.py        # PPO vs the chase bot -> rl/checkpoints/model.pt (best vs-chase)
+uv run rl/train.py                 # PPO self-play -> rl/checkpoints/model.pt (best vs-chase)
+uv run rl/train.py --iters 1500    # train longer for a stronger bot
 ```
 
-In a second terminal, watch the run as it happens:
-
-```bash
-uv run tensorboard --logdir rl/runs        # http://localhost:6006
-```
-
-You'll see `loss/{policy,value,entropy}`, `rollout/{reward,return,value}_mean`,
-`perf/decisions_per_s`, and `eval/chase_{goals,conceded,net}`. Prefer a cloud
-dashboard? `uv sync --extra wandb`, `uv run wandb login` once, then
-`WANDB=1 uv run rl/train.py`.
+It prints `vs chase R:B (net ±)` every 10 iterations — goals-for minus
+goals-against against the hand-coded "run at the ball" baseline. Watch that net
+climb; a few hundred iterations is enough to comfortably beat the baseline. The best
+checkpoint so far is saved to `rl/checkpoints/model.pt`.
 
 ## 4. Configure a run
 
-All knobs are a typed `Settings` model (`pydantic-settings`) at the top of
-`rl/train.py`. Override any field via an env var (upper-cased) or a `.env` file:
+The trainer is a single self-contained script with `argparse` flags and a block of
+hyper-parameters at the top of `rl/train.py`:
 
 ```bash
-ITERS=500 JIGGLE=0.2 RUN_NAME=longer uv run rl/train.py
-DEV=mps uv run rl/train.py    # try Apple-GPU; CPU is often faster for this small MLP
-TB=0 uv run rl/train.py       # disable all tracking
+uv run rl/train.py --iters 1500 --hidden 256 --depth 2 --out my_model.pt
 ```
 
-Adding a new knob? Add a field to `Settings`, not a scattered `os.environ.get`.
+Tune `N_ENVS`, `T`, `GAMMA`, `LR`, the snapshot-pool size, etc. directly in the
+constants block — they're documented inline.
 
 ## 5. Play against your bot
 
 ```bash
-uv run rl/play.py             # YOU = red (arrow keys, X/space to kick), model = blue
-uv run rl/render_demo.py static   # headless: writes demo.gif + frame.png
+uv run rl/play.py                  # YOU = red (arrow keys, X/space to kick), model = blue
+uv run rl/play.py --model my_model.pt
 ```
 
 ## 6. Make a change safely
@@ -83,19 +78,18 @@ uv run rl/render_demo.py static   # headless: writes demo.gif + frame.png
 - **Touching physics** (`rust/haxball_core/src/physics.rs`)? Re-run
   `test_fidelity.py`; add a case if you add a collision path. Rebuild with
   `uv sync` (or `uv run maturin develop --release` for a faster inner loop).
-- **Changing obs/reward/done/step** (`lib.rs`)? These are the env contract. Keep the
-  obs side-symmetric and keep `R_GOAL` (the eval detects goals from reward sign).
-  Read the invariants in `ARCHITECTURE.md` first.
-- **Training code** (`rl/`)? Use `loguru` for console, the `log()` helper for
-  metrics. Keep `rl/` → `haxball_core` as the only dependency direction.
+- **Changing obs / reward / action / done / mutators**? These live in the
+  `haxballgym` package, not the Rust core — each is a small composable class. Keep
+  the obs side-symmetric (see the invariants in `ARCHITECTURE.md`). The Rust core
+  exposes only physics + batched state.
+- **Training code** (`rl/`)? It's example code — keep it self-contained and readable.
+  Keep `rl/` → `haxballgym` → `haxball_core` as the only dependency direction.
 
 ## 7. Where to go next
 
-- The current open problem and prioritized backlog:
-  `docs/exec-plans/active/next-iteration.md`.
 - Why the architecture is what it is, and the lessons already paid for:
   `docs/design-docs/`.
-- The north-star goals: `CURRENT_GOALS.md`.
+- A runnable training example to build on: `rl/` (`train.py` + `play.py`).
 
 ## Troubleshooting
 
@@ -103,6 +97,6 @@ uv run rl/render_demo.py static   # headless: writes demo.gif + frame.png
 |---|---|
 | `ModuleNotFoundError: haxball_core` | Run `uv sync`, and prefix commands with `uv run`. |
 | Link error from `cargo build` | Expected — the build goes through maturin; use `uv sync`. |
-| `tensorboard`/`loguru`/`pydantic` missing | `uv sync` (they're declared in `rl/pyproject.toml`). |
+| `torch`/`pygame`/`numpy` missing | `uv sync` (they're declared in `rl/pyproject.toml`). |
 | Edited Rust but Python didn't change | Rebuild: `uv sync` (or `uv run maturin develop --release`). |
-| Training prints but no curves | TensorBoard needs `--logdir rl/runs`; check the run dir printed at startup. |
+| `play.py` can't open a window | It needs a local display; train headless on a server, play locally. |

@@ -192,9 +192,6 @@ fn make_disc(
 pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World, usize), String> {
     let s: RawStadium = serde_json::from_str(json).map_err(|e| format!("bad .hbs JSON: {e}"))?;
 
-    // y-flipped vertex positions (only used as segment endpoints).
-    let verts: Vec<Vec2> = s.vertexes.iter().map(|v| [v.x, -v.y]).collect();
-
     // Ball: canonical collision flags; radius/mass/damping/bcoef from ballPhysics.
     let bp = &s.ball_physics;
     let ball = make_disc(
@@ -234,7 +231,7 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
             damping: pp.damping.unwrap_or(0.96),
             bcoef: pp.b_coef.unwrap_or(0.5),
             gravity: [0.0, 0.0],
-            cgroup: flag::PLAYER_COLLISION | team,
+            cgroup: team, // just the team flag (no `ball`) — players pass through ballArea
             cmask: flag::PLAYER_COLLISION,
             is_player: true,
             accel: pp.acceleration.unwrap_or(0.1),
@@ -252,19 +249,16 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
         push_player(flag::BLUE);
     }
 
-    // Straight segments (curved ones skipped & counted). bias is y-negated.
+    // Segments — straight lines and curved arcs alike. `Segment::build` replicates
+    // Ursinaxball's geometry (y-flip vertices, negate curve/bias, precompute the arc),
+    // so we pass the *raw* .hbs vertex coords here.
     let mut segments = Vec::new();
-    let mut skipped_curves = 0usize;
     for seg in &s.segments {
         let p = seg
             .props
             .over(seg.tr.as_ref().and_then(|t| s.traits.get(t)));
-        if p.curve.unwrap_or(0.0) != 0.0 {
-            skipped_curves += 1;
-            continue;
-        }
-        let (v0, v1) = match (verts.get(seg.v0), verts.get(seg.v1)) {
-            (Some(a), Some(b)) => (*a, *b),
+        let (rv0, rv1) = match (s.vertexes.get(seg.v0), s.vertexes.get(seg.v1)) {
+            (Some(a), Some(b)) => ([a.x, a.y], [b.x, b.y]),
             _ => {
                 return Err(format!(
                     "segment references missing vertex {} / {}",
@@ -272,14 +266,15 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
                 ))
             }
         };
-        segments.push(Segment {
-            v0,
-            v1,
-            bcoef: p.b_coef.unwrap_or(1.0),
-            bias: -p.bias.unwrap_or(0.0),
-            cgroup: p.cgroup(flag::WALL),
-            cmask: p.cmask(flag::ALL),
-        });
+        segments.push(Segment::build(
+            rv0,
+            rv1,
+            p.curve.unwrap_or(0.0),
+            p.bias.unwrap_or(0.0),
+            p.b_coef.unwrap_or(1.0),
+            p.cgroup(flag::WALL),
+            p.cmask(flag::ALL),
+        ));
     }
 
     // Planes (normal y-flipped).
@@ -324,19 +319,17 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
         red_score: 0,
         blue_score: 0,
         steps: 0,
-        kick_cancel: vec![false; n_players],
+        kick_flag: vec![false; n_players],
+        kick_held_prev: vec![false; n_players],
+        kick_cooldown: vec![0; n_players],
+        kick_burst: vec![0; n_players],
+        kick_rate_min: 2,
+        kick_rate_cost: 0,
+        kick_rate_cap: 1,
         spawn_distance: s.spawn_distance.unwrap_or(277.5),
         red_spawn: s.red_spawn.iter().map(|p| [p[0], -p[1]]).collect(),
         blue_spawn: s.blue_spawn.iter().map(|p| [p[0], -p[1]]).collect(),
     };
     w.reset_positions();
-
-    if skipped_curves > 0 {
-        eprintln!(
-            "[haxball_core] stadium '{}': skipped {} curved segment(s) (not yet resolved)",
-            s.name.as_deref().unwrap_or("?"),
-            skipped_curves
-        );
-    }
-    Ok((w, skipped_curves))
+    Ok((w, 0)) // second field kept for API compat; curved segments are now resolved
 }

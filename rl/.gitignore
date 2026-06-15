@@ -1,7 +1,0 @@
-.venv/
-__pycache__/
-*.log
-checkpoints/*.zip
-runs/
-wandb/
-.env

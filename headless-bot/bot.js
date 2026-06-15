@@ -28,7 +28,25 @@ const RED = 1, BLUE = 2, SPEC = 0;
 
 // ── Policy (the trained MLP; weights from export_policy.py) ───────────────────
 const PX = 1 / 420, PY = 1 / 200, VS = 1 / 10, GOAL_X = 370;
-const P = JSON.parse(fs.readFileSync(path.join(__dirname, "policy.json"), "utf8"));
+const POLICY_PATH = path.join(__dirname, "policy.json");
+// `let` so we can HOT-RELOAD new weights live (the `!reload` command / file-watch) without
+// restarting the room — re-export policy.json, the running bot picks it up, same link.
+let P = JSON.parse(fs.readFileSync(POLICY_PATH, "utf8"));
+let roomRef = null; // set in onOpen; lets the file-watch announce the new bot in-room
+function reloadPolicy() {
+  P = JSON.parse(fs.readFileSync(POLICY_PATH, "utf8"));
+  return P.obs_dim;
+}
+// auto-reload whenever policy.json changes on disk (so a fresh export swaps the bot instantly)
+try {
+  fs.watchFile(POLICY_PATH, { interval: 1000 }, () => {
+    try {
+      reloadPolicy();
+      console.log(`policy.json changed -> reloaded "${P.name || "bot"}"`);
+      if (roomRef) roomRef.sendAnnouncement(`▶ Now playing: "${P.name || "bot"}".`, null, 0x88ccff);
+    } catch (e) { console.log("reload failed:", e.message); }
+  });
+} catch { /* watch unsupported; !reload still works */ }
 
 function linear(x, layer) {
   const out = new Array(layer.b.length);
@@ -54,23 +72,29 @@ function act(obs) {
 }
 
 // Goal-relative, side-aware observation — identical to haxballgym DefaultObs.
+// CRITICAL: DefaultObs MIRRORS the x-axis for blue (so both teams see "attacking +x" and one
+// net plays both sides). We must apply the SAME mirror here — `sx = -1` for blue negates every
+// x-component — or a blue bot gets left/right inverted and runs the wrong way. The action's dx
+// is un-mirrored by the same `sx` in controlBot (matches env.py `engine_actions[...,0]*=mirror`).
 function buildObs(self, ball, opp, team) {
   const fy = CONFIG.flipY ? -1 : 1;
-  const targetX = team === RED ? GOAL_X : -GOAL_X; // red attacks +x, blue attacks -x
+  const sx = team === RED ? 1 : -1; // blue x-mirror, matching DefaultObs (out[...,0::2] *= sx)
+  const targetX = team === RED ? GOAL_X : -GOAL_X; // attacked goal in WORLD: red +x, blue -x
   return [
-    self.pos.x * PX, self.pos.y * fy * PY,
-    self.speed.x * VS, self.speed.y * fy * VS,
-    (ball.pos.x - self.pos.x) * PX, (ball.pos.y - self.pos.y) * fy * PY,
-    ball.speed.x * VS, ball.speed.y * fy * VS,
-    (targetX - self.pos.x) * PX, -self.pos.y * fy * PY,
-    (-targetX - self.pos.x) * PX, -self.pos.y * fy * PY,
-    (opp.pos.x - self.pos.x) * PX, (opp.pos.y - self.pos.y) * fy * PY,
-    opp.speed.x * VS, opp.speed.y * fy * VS,
+    sx * self.pos.x * PX, self.pos.y * fy * PY,
+    sx * self.speed.x * VS, self.speed.y * fy * VS,
+    sx * (ball.pos.x - self.pos.x) * PX, (ball.pos.y - self.pos.y) * fy * PY,
+    sx * ball.speed.x * VS, ball.speed.y * fy * VS,
+    sx * (targetX - self.pos.x) * PX, -self.pos.y * fy * PY,
+    sx * (-targetX - self.pos.x) * PX, -self.pos.y * fy * PY,
+    sx * (opp.pos.x - self.pos.x) * PX, (opp.pos.y - self.pos.y) * fy * PY,
+    sx * opp.speed.x * VS, opp.speed.y * fy * VS,
   ];
 }
 
 // ── Room ──────────────────────────────────────────────────────────────────────
-let tick = 0, lastKey = -1;
+let tick = 0, lastKey = -1, decisions = 0;
+const DEBUG = process.env.DEBUG === "1";
 const announce = (room, msg, to = null, color = 0x88ccff) =>
   Utils.runAfterGameTick(() => room.sendAnnouncement(msg, to, color, "normal", 0));
 const after = (fn) => Utils.runAfterGameTick(fn);
@@ -94,7 +118,9 @@ function controlBot(room) {
   if (!self || !ball || !opp) return;
 
   const { dx, dy, kick } = act(buildObs(self, ball, opp, me.team.id));
-  const key = Utils.keyState(dx, CONFIG.flipY ? -dy : dy, kick);
+  // un-mirror dx for blue (the obs was x-mirrored): world dx = sx·dx, matching env.py.
+  const sx = me.team.id === RED ? 1 : -1;
+  const key = Utils.keyState(sx * dx, CONFIG.flipY ? -dy : dy, kick);
   after(() => {
     if (key !== lastKey || kick !== me.isKicking) {
       // to re-kick when the keystate is unchanged, release the kick bit first
@@ -119,8 +145,19 @@ function handleCommand(room, player, text) {
         if (me) room.setPlayerTeam(me.id, botTeam === RED ? RED : BLUE);
       });
       break;
+    case "reload": // hot-swap the bot's weights from policy.json — no room restart
+      try {
+        reloadPolicy();
+        announce(room, `▶ Now playing: "${P.name || "bot"}" (obs_dim ${P.obs_dim}).`);
+      } catch (e) {
+        announce(room, `Reload failed: ${e.message}`, player.id, 0xff8888);
+      }
+      break;
+    case "who": // which bot is loaded?
+      announce(room, `▶ Current bot: "${P.name || "bot"}".`, player.id);
+      break;
     case "help":
-      announce(room, "Commands: !restart  !start  !stop  !swap   (you're admin — UI buttons work too)", player.id);
+      announce(room, "Commands: !restart  !start  !stop  !swap  !reload  !who  (UI buttons work too)", player.id);
       break;
     default:
       announce(room, `Unknown command: !${cmd}`, player.id, 0xff8888);
@@ -139,7 +176,8 @@ Room.create(
   {
     storage: { player_name: "RL-Host" },
     onOpen: (room) => {
-      room.fakePlayerJoin(BOT_ID, "RL-Bot 🤖", "tr", "🤖", "fake-conn", "fake-auth");
+      roomRef = room; // for file-watch in-room announcements
+      room.fakePlayerJoin(BOT_ID, `🤖 RL · ${P.name || "bot"}`, "tr", "🤖", "fake-conn", "fake-auth");
       after(() => room.setPlayerTeam(BOT_ID, RED));
 
       room.onRoomLink = (link) =>
@@ -152,7 +190,7 @@ Room.create(
           const blueTaken = humans(room).some((p) => p.id !== player.id && p.team?.id === BLUE);
           room.setPlayerTeam(player.id, blueTaken ? SPEC : BLUE);
         });
-        announce(room, "You're admin. The bot is on red. Type !help for commands.", player.id);
+        announce(room, `You're admin. Bot on red, playing "${P.name || "bot"}". Type !help.`, player.id);
         startIfReady(room);
       };
 

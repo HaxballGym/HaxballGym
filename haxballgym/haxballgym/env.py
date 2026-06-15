@@ -34,6 +34,7 @@ class Env:
         termination_cond: DoneCondition,
         truncation_cond: DoneCondition,
         state_mutator: StateMutator,
+        action_stack: int = 0,
     ):
         self.engine = engine
         self.obs_builder = obs_builder
@@ -46,6 +47,10 @@ class Env:
         # DefaultObs mirrors the x-axis for blue (so both sides see "attacking +x");
         # undo that mirror on the action's dx so blue moves the right way in the world.
         self._mirror_x = np.where(engine._teams == RED, 1, -1)  # (N, P): +1 red, -1 blue
+        # Action stacking (Lucy-SKG): append the last `action_stack` actions to each
+        # player's obs, giving the policy short-term memory of what it just did.
+        self.action_stack = int(action_stack)
+        self._act_buf = None  # (N, P, action_stack*3)
 
     # --- spaces / shapes ---
     @property
@@ -58,7 +63,7 @@ class Env:
 
     @property
     def obs_dim(self) -> int:
-        return self.obs_builder.obs_dim(self.n_players)
+        return self.obs_builder.obs_dim(self.n_players) + 3 * self.action_stack
 
     @property
     def action_space(self) -> tuple[int, ...]:
@@ -76,7 +81,13 @@ class Env:
         ):
             c.reset(state)
         self.prev_state = state
-        return self.obs_builder.build_obs(state)
+        obs = self.obs_builder.build_obs(state)
+        if self.action_stack:
+            self._act_buf = np.zeros(
+                (self.n_envs, self.n_players, 3 * self.action_stack), dtype=np.float32
+            )
+            obs = np.concatenate([obs, self._act_buf], axis=-1)
+        return obs
 
     def step(self, actions: np.ndarray):
         engine_actions = self.action_parser.parse_actions(actions)
@@ -93,6 +104,16 @@ class Env:
             state = self.engine.snapshot()  # refreshed post-reset
 
         obs = self.obs_builder.build_obs(state)
+        if self.action_stack:
+            # roll the buffer: drop the oldest action, append this tick's (centered to
+            # [-1,1] for dx/dy). The actions are in policy frame (mirror-consistent obs).
+            a = np.asarray(actions, dtype=np.float32).copy()
+            a[..., 0] -= 1.0
+            a[..., 1] -= 1.0
+            self._act_buf = np.concatenate([self._act_buf[..., 3:], a], axis=-1)
+            if done.any():
+                self._act_buf[done] = 0.0  # fresh episode -> no action history
+            obs = np.concatenate([obs, self._act_buf], axis=-1)
         self.prev_state = state
         return obs, rewards, terminated, truncated
 
@@ -106,7 +127,7 @@ def make_default_env(
     goal_weight: float = 5.0,
     stadium: str | None = None,
 ) -> Env:
-    """The current baseline 1v1 setup: WazBot's CombinedReward, DefaultObs,
+    """A sensible baseline 1v1 setup: the bundled CombinedReward, DefaultObs,
     discrete actions, goal-or-timeout episodes. Swap any piece to experiment.
     `stadium` picks the map (bundled name or .hbs path); None = built-in classic."""
     engine = TransitionEngine(

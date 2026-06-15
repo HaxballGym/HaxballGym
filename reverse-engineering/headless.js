@@ -1,7 +1,3 @@
-/*
- HaxBall © Mario Carbajal - All rights reserved.
- 0349dd60
-*/
 'use strict';
 (function (wa) {
     function pb() {

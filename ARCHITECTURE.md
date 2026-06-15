@@ -9,8 +9,8 @@ cleverer algorithm, is what reaches superhuman.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  rl/            policy · PPO · opponents · replays · render   │   Python
-│                 live tracking (TensorBoard / W&B)             │
+│  rl/            example scripts: PPO self-play · play vs model │   Python
+│                 (train.py · play.py)                          │
 └───────────────▲─────────────────────────────────────────────┘
                 │  composes env pieces; one step() advances ALL envs
 ┌───────────────┴─────────────────────────────────────────────┐
@@ -51,8 +51,8 @@ ran at low-thousands of steps/sec — the reason it was "a million times slower"
 RLGym. The core removes the engine entirely: pure `f64` math, no objects, no
 rendering. The Python↔Rust boundary is crossed **once per batch of envs**, not once
 per game step, and the GIL is released during the sim (rayon). Result: ~50M
-env-steps/s (1v1) raw. See `docs/design-docs/improvement-plan.md` for the full
-diagnosis and the measured table.
+env-steps/s (1v1) raw — orders of magnitude faster, which is the whole reason
+strong self-play is reachable on a single machine.
 
 ## The simulation contract
 
@@ -61,21 +61,21 @@ Rust core and Ursinaxball's pure-numpy `fn_base.py` and asserts agreement to 1e-
 **This is the contract that lets us trust the speed.** Any change under `physics.rs`
 must keep it green; new collision paths get a new fidelity case.
 
-## The env interface (today, and where it's going)
+## The env interface
 
-`VecEnv` currently bakes the obs, reward, action decoding, and done logic directly
-into `lib.rs` (fast, but monolithic). The planned evolution is an **RLGym-v2-style
-decomposition** — `StateMutator` / `ObsBuilder` / `ActionParser` / `RewardFunction`
-/ `DoneCondition` as composable pieces over the same `VecEnv` transition engine — so
-experiments swap a reward or obs without touching the physics. The legacy package
-(now deleted, recoverable from git) already modeled these interfaces in Python; they
-map almost 1:1. Tracked in `docs/exec-plans/active/next-iteration.md`.
+The Rust `VecEnv` is a pure **transition engine** — physics + batched state, nothing
+else (no obs, no reward, no done). Everything else lives in the `haxballgym` Python
+package as an **RLGym-v2-style decomposition**: `StateMutator` / `ObsBuilder` /
+`ActionParser` / `RewardFunction` / `DoneCondition` are composable pieces over the
+same engine, so an experiment swaps a reward or obs without touching the physics.
+See `docs/design-docs/env-api.md` for the full surface.
 
 ## Key invariants worth not breaking
 
 - **Obs is side-symmetric** (target-goal / own-goal relative). One shared policy
-  plays red and blue with no per-team mirroring. This is deliberate — the old
-  HaxballGym double-mirror bug is documented in the next-iteration doc.
+  plays red and blue with no per-team mirroring. This is deliberate — a naive
+  per-team mirror is easy to apply twice (once on the obs, once on the action) and
+  silently halves your effective data.
 - **Velocity rewards are dense and non-zero-sum** → they prevent the no-score
   defensive collapse that pure distance/goal shaping caused under self-play.
 - **`R_GOAL` magnitude is also the eval signal** (goals detected via reward sign);
@@ -83,6 +83,7 @@ map almost 1:1. Tracked in `docs/exec-plans/active/next-iteration.md`.
 
 ## Conventions
 
-Config via `pydantic-settings` (`Settings`), console via `loguru`, metrics via the
-`log()` helper (TensorBoard default, W&B optional). New code follows these so a run
-is always inspectable and reproducible from env/`.env` alone.
+`haxballgym` stays dependency-light (numpy + the core) and fully batched — every
+obs/reward/done operates on `(N, P, …)` arrays, never a per-env Python loop. The
+`rl/` scripts are deliberately self-contained and dependency-light (numpy + torch +
+pygame) so they read as a starting point you can copy and extend, not a framework.

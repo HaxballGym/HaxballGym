@@ -1,25 +1,18 @@
 [project]
-name = "haxballgym-rl"
+name = "haxballgym-examples"
 version = "0.3.0"
-description = "PPO training, self-play, and human-vs-model play on the haxball_core engine."
+description = "Example scripts for haxballgym — train your first Haxball bot with PPO self-play, then play it."
 requires-python = ">=3.12"
 dependencies = [
-    "haxball-core",           # the Rust physics engine (workspace member)
-    "haxballgym",             # the composable env API (workspace member)
+    "haxball-core",   # the Rust physics engine (workspace member)
+    "haxballgym",     # the composable env API (workspace member)
     "numpy>=1.23",
     "torch>=2.0",
-    "pygame>=2.5",            # play.py (human vs model)
-    "pillow>=10.0",           # render_demo.py (GIF/PNG)
-    "tensorboard>=2.16",      # live metrics: tensorboard --logdir rl/runs
-    "loguru>=0.7",            # clean console logging
-    "pydantic-settings>=2.0", # typed env-var config (Settings in train.py)
+    "pygame>=2.5",    # play.py — play against your model
 ]
 
-[project.optional-dependencies]
-wandb = ["wandb>=0.16"]       # optional cloud dashboard (WANDB=1)
-
 [tool.uv]
-package = false               # a folder of scripts, not an installable distribution
+package = false       # a folder of scripts, not an installable distribution
 
 [tool.uv.sources]
 haxball-core = { workspace = true }

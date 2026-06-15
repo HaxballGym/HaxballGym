@@ -42,6 +42,8 @@ class TransitionEngine:
         self.player_max_speed = self._e.player_max_speed
         self._teams = self._e.teams()  # (N, P), static
         self._goal_p0, self._goal_p1, self._goal_team = self._e.goals()  # stadium geometry
+        self._walls = self._e.wall_segments()  # (M, 4) ball-colliding walls [x0,y0,x1,y1], static
+        self._obstacles = self._e.obstacle_discs()  # (D, 3) static post discs [x,y,radius]
         self._no_goal = np.full(self.n_envs, -1, dtype=np.int8)
 
     def reset(self) -> GameState:
@@ -62,6 +64,31 @@ class TransitionEngine:
         """Current state without stepping (used to refresh after a masked reset)."""
         return self._state(self._no_goal)
 
+    def set_state(
+        self,
+        ball_pos: np.ndarray,  # (N, 2)
+        ball_vel: np.ndarray,  # (N, 2)
+        player_pos: np.ndarray,  # (N, P, 2)
+        player_vel: np.ndarray,  # (N, P, 2)
+        steps: np.ndarray | None = None,  # (N,) — defaults to 0 (a fresh episode)
+    ) -> GameState:
+        """Place an arbitrary state into every env and return it. The inverse of
+        `snapshot`; the primitive behind non-kickoff `StateMutator`s (random spawns,
+        scenario drills, seeding a replay position). Scores are untouched."""
+        self._e.set_state(
+            np.ascontiguousarray(ball_pos, dtype=np.float64),
+            np.ascontiguousarray(ball_vel, dtype=np.float64),
+            np.ascontiguousarray(player_pos, dtype=np.float64),
+            np.ascontiguousarray(player_vel, dtype=np.float64),
+            None if steps is None else np.ascontiguousarray(steps, dtype=np.int64),
+        )
+        return self.snapshot()
+
+    def set_kick_rate_limit(self, min_ticks: int, cost: int = 0, cap: int = 1) -> None:
+        """Set the kickRateLimit (Haxball's min/rate/burst) for all envs. The DNA replay
+        rooms use min=6; default is min=2. Needed to re-simulate replays faithfully."""
+        self._e.set_kick_rate_limit(int(min_ticks), int(cost), int(cap))
+
     def _state(self, scored: np.ndarray) -> GameState:
         bp, bv, pp, pv, st = self._e.snapshot()
         return GameState(
@@ -75,5 +102,7 @@ class TransitionEngine:
             goal_p0=self._goal_p0,
             goal_p1=self._goal_p1,
             goal_team=self._goal_team,
+            walls=self._walls,
+            obstacles=self._obstacles,
             player_max_speed=self.player_max_speed,
         )

@@ -14,10 +14,11 @@ is now reachable on a single machine.
 | Path | What it is |
 |---|---|
 | **`rust/haxball_core/`** | The physics core. Headless, `f64`, vectorized `VecEnv` (N matches via rayon). Compiles to a Python extension today, WASM next. |
-| **`rl/`** | PPO training on the core, live metrics (TensorBoard/W&B), `play.py` (human vs model), GIF rendering. |
+| **`haxballgym/`** | The composable env API — obs, reward, action, done, and state mutators — on top of the core (the RLGym-v2 decomposition). |
+| **`rl/`** | Runnable examples: `train.py` (PPO self-play) and `play.py` (human vs your model). |
 | **`reverse-engineering/`** | The (permissioned) original Haxball source — used to replicate the replay format, headless rooms, and map loading. |
-| **`docs/`** | Architecture, how-to, design docs, and execution plans. **Start here:** [`docs/HOW_TO.md`](docs/HOW_TO.md). |
-| **`AGENTS.md`** / **`ARCHITECTURE.md`** | The lean map and the layered architecture (read before changing structure). |
+| **`docs/`** | Architecture, how-to, and design docs. **Start here:** [`docs/HOW_TO.md`](docs/HOW_TO.md). |
+| **`ARCHITECTURE.md`** | The layered architecture (read before changing structure). |
 
 ## Quickstart
 
@@ -25,26 +26,23 @@ This is a **uv workspace** (`rust/haxball_core` + `rl`). One command builds the 
 core and installs everything into `.venv`:
 
 ```bash
-uv sync                                                   # builds core + installs deps + uv.lock
-uv run rust/haxball_core/tests/test_fidelity.py    # port matches Haxball to 1e-9
+uv sync                                          # builds core + installs deps + uv.lock
+uv run rust/haxball_core/tests/test_fidelity.py  # port matches Haxball to 1e-9
 
-uv run rl/train.py                 # PPO vs the chase bot -> rl/checkpoints/model.pt
-uv run tensorboard --logdir rl/runs       # live curves at http://localhost:6006
+uv run rl/train.py                 # PPO self-play vs the chase bot -> rl/checkpoints/model.pt
 uv run rl/play.py                  # YOU (arrows + X/space) vs the trained model
 ```
 
-No venv activation, no `pip`. Add a dep with `uv add <pkg>` (in `rl/` for training
-deps); the optional W&B dashboard is `uv sync --extra wandb`.
+No venv activation, no `pip`. Add a dep with `uv add <pkg>`.
 
 Full onboarding, including the why behind each piece: **[`docs/HOW_TO.md`](docs/HOW_TO.md)**.
 
-## Status & roadmap
+## Status
 
-The fast core, fidelity tests, and a working PPO + live-tracking loop are in place.
-The current open problem and the prioritized backlog (defensive reward, behavioral
-cloning from 21k human replays, 2v2/3v3, WASM+ONNX in-browser play) live in
-[`docs/exec-plans/active/next-iteration.md`](docs/exec-plans/active/next-iteration.md).
-The north-star goals are in [`CURRENT_GOALS.md`](CURRENT_GOALS.md).
+The fast core, fidelity tests, the composable env API, and a runnable PPO self-play
+example are in place. Next up: WASM + ONNX for in-browser play and larger team sizes
+(2v2/3v3). The env pieces are fully composable — swap obs/reward/mutators to
+experiment (see `rl/README.md` for where to extend).
 
 ## Legal
 

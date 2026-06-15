@@ -81,7 +81,10 @@ fn collides(group_a: i64, mask_a: i64, group_b: i64, mask_b: i64) -> bool {
 // Each returns the mutated (position, velocity) just like the Python.
 // ===========================================================================
 
-/// Port of `resolve_disc_disc_collision_fn`.
+/// Port of Haxball's disc-disc collision, matching game-min.js's EXACT float operation
+/// order (so a re-simulation stays bit-identical to the real engine over a whole game —
+/// the `overlap - overlap*mf` and `e - mf*e` forms differ from `overlap*(1-mf)` by 1 ULP,
+/// which compounds during dribbles). Verified vs node-haxball ground truth.
 #[allow(clippy::too_many_arguments)]
 pub fn disc_disc(
     mut pa: Vec2,
@@ -95,28 +98,31 @@ pub fn disc_disc(
     ba: f64,
     bb: f64,
 ) -> (Vec2, Vec2, Vec2, Vec2) {
-    let dist = norm(sub(pa, pb));
-    let radius_sum = ra + rb;
-    if dist > 0.0 && dist <= radius_sum {
-        let normal = scale(sub(pa, pb), 1.0 / dist);
-        let mass_factor = ima / (ima + imb);
-        pa = add(pa, scale(normal, (radius_sum - dist) * mass_factor));
-        pb = sub(pb, scale(normal, (radius_sum - dist) * (1.0 - mass_factor)));
-        let relative_velocity = sub(va, vb);
-        let normal_velocity = dot(relative_velocity, normal);
-        if normal_velocity < 0.0 {
-            let bouncing_factor = -(1.0 + ba * bb);
-            va = add(
-                va,
-                scale(normal, normal_velocity * bouncing_factor * mass_factor),
-            );
-            vb = sub(
-                vb,
-                scale(
-                    normal,
-                    normal_velocity * bouncing_factor * (1.0 - mass_factor),
-                ),
-            );
+    let dx = pa[0] - pb[0];
+    let dy = pa[1] - pb[1];
+    let distsq = dx * dx + dy * dy;
+    let rs = ra + rb;
+    if distsq > 0.0 && distsq <= rs * rs {
+        let dist = distsq.sqrt();
+        let nx = dx / dist;
+        let ny = dy / dist;
+        let mf = ima / (ima + imb);
+        let overlap = rs - dist;
+        let pf = overlap * mf; // a's share of the separation
+        pa[0] += nx * pf;
+        pa[1] += ny * pf;
+        let ob = overlap - pf; // b's share, as Haxball computes it (NOT overlap*(1-mf))
+        pb[0] -= nx * ob;
+        pb[1] -= ny * ob;
+        let mut nv = nx * (va[0] - vb[0]) + ny * (va[1] - vb[1]);
+        if nv < 0.0 {
+            nv *= ba * bb + 1.0;
+            let ca = mf * nv;
+            va[0] -= nx * ca;
+            va[1] -= ny * ca;
+            let cb = nv - ca; // b's share, again as `nv - mf*nv`
+            vb[0] += nx * cb;
+            vb[1] += ny * cb;
         }
     }
     (pa, pb, va, vb)
@@ -329,7 +335,12 @@ impl Disc {
             damping: 0.96,
             bcoef: 0.5,
             gravity: [0.0, 0.0],
-            cgroup: flag::PLAYER_COLLISION | team,
+            // Player disc collision: cGroup is just the team flag (Ursinaxball default
+            // group = NONE + team). Crucially it does NOT include `ball`, so players pass
+            // through the ballArea segments (cMask=ball, the x=±370 walls) into the goal
+            // area, like real Haxball. cMask omits redKO/blueKO so players aren't blocked
+            // by the kickoff barriers during normal play (we don't model the kickoff lock).
+            cgroup: team,
             cmask: flag::PLAYER_COLLISION,
             is_player: true,
             accel: 0.1,
@@ -342,7 +353,9 @@ impl Disc {
     }
 }
 
-/// A static line segment (straight only in v1; curved goal-net arcs are TODO).
+/// A static segment, straight or a circular arc (goal nets, kickoff semicircles).
+/// For a straight segment `curve == 0` and only `v0/v1` matter; for an arc the
+/// precomputed `center/radius/tangent_0/tangent_1` drive `segment_curve`.
 #[derive(Clone)]
 pub struct Segment {
     pub v0: Vec2,
@@ -351,6 +364,73 @@ pub struct Segment {
     pub bias: f64,
     pub cgroup: i64,
     pub cmask: i64,
+    pub curve: f64, // 0 = straight; else the cotangent form used by segment_curve
+    pub center: Vec2,
+    pub radius: f64,
+    pub tangent_0: Vec2,
+    pub tangent_1: Vec2,
+}
+
+impl Segment {
+    /// Build a segment from raw `.hbs` data (vertices in native coords, `curve` in
+    /// degrees), replicating Ursinaxball `segment_object.py`: flip vertices in y,
+    /// negate curve/bias (the y-symmetry), fold the curve into its cotangent form, and
+    /// precompute the arc center/radius/tangents. `curve_deg == 0` → a straight segment.
+    pub fn build(
+        v0_raw: Vec2,
+        v1_raw: Vec2,
+        curve_deg: f64,
+        bias_raw: f64,
+        bcoef: f64,
+        cgroup: i64,
+        cmask: i64,
+    ) -> Self {
+        use std::f64::consts::PI;
+        // Vertex.get_y_symmetry: y -> -y. Segment.get_y_symmetry_before: negate bias.
+        let mut a = [v0_raw[0], -v0_raw[1]];
+        let mut b = [v1_raw[0], -v1_raw[1]];
+        let mut bias = -bias_raw;
+        // Segment.calculate_curve: degrees -> radians, fold sign, cotangent form.
+        let mut cv = (-curve_deg) * PI / 180.0;
+        if cv < 0.0 {
+            cv = -cv;
+            std::mem::swap(&mut a, &mut b);
+            bias = -bias;
+        }
+        let curve = if cv > 0.174_358_392_274_233_53 && cv < 340.0 * PI / 180.0 {
+            1.0 / (cv / 2.0).tan()
+        } else {
+            cv
+        };
+        // Segment.calculate_additional_properties + get_y_symmetry_after (swap tangents).
+        let (mut center, mut radius) = ([0.0, 0.0], 0.0);
+        let (mut t0, mut t1) = ([0.0, 0.0], [0.0, 0.0]);
+        if curve != 0.0 {
+            let vc = scale(sub(b, a), 0.5);
+            center = [a[0] + vc[0] - vc[1] * curve, a[1] + vc[1] + vc[0] * curve];
+            radius = norm(sub(b, center));
+            t0 = [-(a[1] - center[1]), a[0] - center[0]];
+            t1 = [b[1] - center[1], -(b[0] - center[0])];
+            if curve < 0.0 {
+                t0 = scale(t0, -1.0);
+                t1 = scale(t1, -1.0);
+            }
+            std::mem::swap(&mut t0, &mut t1);
+        }
+        Segment {
+            v0: a,
+            v1: b,
+            bcoef,
+            bias,
+            cgroup,
+            cmask,
+            curve,
+            center,
+            radius,
+            tangent_0: t0,
+            tangent_1: t1,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -380,8 +460,17 @@ pub struct World {
     pub red_score: u32,
     pub blue_score: u32,
     pub steps: u64,
-    pub kick_cancel: Vec<bool>, // per player
-    pub spawn_distance: f64,    // stadium spawnDistance (kickoff spread)
+    pub kick_flag: Vec<bool>,      // "winding up to kick", set on the kick key's rising
+    //                                edge, cleared on release or an actual kick (d.Yb)
+    pub kick_held_prev: Vec<bool>, // kick key state last tick (for rising-edge detection)
+    pub kick_cooldown: Vec<i64>,   // ticks of kick lockout remaining (Haxball's d.Zc)
+    pub kick_burst: Vec<i64>,     // kick burst counter, capped at kickRateLimit (d.Cc)
+    // kickRateLimit (min, rate-cost, burst-cap) = Haxball's (Gd, gd, ne). A kick needs
+    // cooldown<=0 and burst>=0; after a kick: cooldown=min, burst-=cost. Default min=2.
+    pub kick_rate_min: i64,
+    pub kick_rate_cost: i64,
+    pub kick_rate_cap: i64,
+    pub spawn_distance: f64,      // stadium spawnDistance (kickoff spread)
     pub red_spawn: Vec<Vec2>,   // explicit spawn points (else the spawn_distance formula)
     pub blue_spawn: Vec<Vec2>,
 }
@@ -431,13 +520,34 @@ impl World {
             bias: 0.0,
             cgroup: flag::WALL,
             cmask: flag::BALL,
+            curve: 0.0,
+            center: [0.0, 0.0],
+            radius: 0.0,
+            tangent_0: [0.0, 0.0],
+            tangent_1: [0.0, 0.0],
         };
-        let segments = vec![
+        let mut segments = vec![
             seg([-370.0, 170.0], [-370.0, 64.0]),
             seg([-370.0, -64.0], [-370.0, -170.0]),
             seg([370.0, 170.0], [370.0, 64.0]),
             seg([370.0, -64.0], [370.0, -170.0]),
         ];
+        // Curved goal-net arcs (collide with the ball) + the inert kickoff-barrier
+        // semicircles, built from the exact classic.hbs raw coords so they are
+        // byte-identical to `world_from_hbs("classic")` (test_stadium_loader).
+        let net = |v0, v1, curve| Segment::build(v0, v1, curve, 0.0, 0.1, flag::WALL, flag::BALL);
+        segments.push(net([-380.0, -64.0], [-400.0, -44.0], -90.0));
+        segments.push(net([-400.0, 44.0], [-380.0, 64.0], -90.0));
+        segments.push(net([380.0, -64.0], [400.0, -44.0], 90.0));
+        segments.push(net([400.0, 44.0], [380.0, 64.0], 90.0));
+        let bar = |group| {
+            Segment::build([0.0, 75.0], [0.0, -75.0], 180.0, 0.0, 0.1, group, flag::RED | flag::BLUE)
+        };
+        segments.push(bar(flag::BLUEKO)); // curve +180, cGroup blueKO (classic.hbs)
+        // the redKO barrier is the curve=-180 twin; build it explicitly
+        segments.push(Segment::build(
+            [0.0, 75.0], [0.0, -75.0], -180.0, 0.0, 0.1, flag::REDKO, flag::RED | flag::BLUE,
+        ));
 
         // Planes (classic.hbs). ballArea planes constrain the ball top/bottom
         // (cMask ball, bCoef 1); the bCoef 0.1 planes constrain players.
@@ -448,6 +558,9 @@ impl World {
             cgroup: flag::WALL,
             cmask,
         };
+        // NOTE: this hardcoded classic is UNUSED for stadium="classic" (that path loads
+        // the real classic.hbs via from_hbs). Kept only as the `stadium=None` fallback;
+        // values mirror classic.hbs (player-containment planes bCoef 0.1).
         let planes = vec![
             plane([0.0, 1.0], -170.0, 1.0, flag::BALL),
             plane([0.0, -1.0], -170.0, 1.0, flag::BALL),
@@ -481,7 +594,13 @@ impl World {
             red_score: 0,
             blue_score: 0,
             steps: 0,
-            kick_cancel: vec![false; n_players],
+            kick_flag: vec![false; n_players],
+            kick_held_prev: vec![false; n_players],
+            kick_cooldown: vec![0; n_players],
+            kick_burst: vec![0; n_players],
+            kick_rate_min: 2,
+            kick_rate_cost: 0,
+            kick_rate_cap: 1,
             spawn_distance: 277.5, // classic
             red_spawn: Vec::new(),
             blue_spawn: Vec::new(),
@@ -518,21 +637,52 @@ impl World {
                 blue_i += 1;
             }
         }
+        // a kickoff is a fresh play: clear per-player kick state
+        for k in 0..self.n_players {
+            self.kick_flag[k] = false;
+            self.kick_held_prev[k] = false;
+            self.kick_cooldown[k] = 0;
+            self.kick_burst[k] = 0;
+        }
     }
 
     /// One physics tick. `actions` is [n_players][3] = (dx, dy, kick).
     /// Returns Some(scoring_team_flag) if a goal was scored this tick.
-    #[allow(clippy::needless_range_loop)] // k indexes discs/actions/kick_cancel in lockstep
+    #[allow(clippy::needless_range_loop)] // k indexes discs/actions/kick state in lockstep
     pub fn step(&mut self, actions: &[[i64; 3]]) -> Option<i64> {
         // --- player movement + kick (player_handler.resolve_movement) ---
         for k in 0..self.n_players {
             let pi = self.first_player + k;
             let act = actions[k];
-            let kicking_input = act[2] == 1;
-            if act[2] == 0 {
-                self.kick_cancel[k] = false;
+            // act[2]: 0 = kick not held, 1 = held, 2 = held AND a rising edge happened
+            // *within this frame* (a human tapping kick fast produces release+repress in
+            // one frame). game-min.js processes every input event, so each off->on edge
+            // re-arms the flag (Yb) via XA; collapsing a frame to its last value would miss
+            // that re-arm. The re-sim passes 2 to signal it; live training only ever uses
+            // 0/1, so this stays backward-compatible.
+            let kicking_input = act[2] >= 1;
+            let intra_frame_rearm = act[2] == 2;
+            // Yb state machine: rising edge of the kick key arms the flag; releasing it
+            // disarms it (an actual kick disarms it too, below).
+            if (kicking_input && !self.kick_held_prev[k]) || intra_frame_rearm {
+                self.kick_flag[k] = true;
             }
-            let is_kicking = kicking_input && !self.kick_cancel[k];
+            if !kicking_input {
+                self.kick_flag[k] = false;
+            }
+            self.kick_held_prev[k] = kicking_input;
+
+            // Kick rate limit (game-min.js: tick `Zc` down, `Cc` up, gate the kick on
+            // both). Values come from the room's kickRateLimit. A player can only kick
+            // while armed AND off cooldown AND with burst credit.
+            if self.kick_cooldown[k] > 0 {
+                self.kick_cooldown[k] -= 1;
+            }
+            if self.kick_burst[k] < self.kick_rate_cap {
+                self.kick_burst[k] += 1;
+            }
+            let kick_allowed =
+                self.kick_flag[k] && self.kick_cooldown[k] <= 0 && self.kick_burst[k] >= 0;
 
             // kick: only the ball has the KICK group in classic.
             let (ppos, pradius, pkstr, pkback, pinvmass) = {
@@ -548,19 +698,29 @@ impl World {
                     continue;
                 }
                 let bpos = self.discs[di].pos;
-                let dist = norm(sub(bpos, ppos));
-                if (dist - pradius - self.discs[di].radius) < 4.0 {
-                    if is_kicking && dist > 0.0 {
-                        let normal = scale(sub(bpos, ppos), 1.0 / dist);
-                        self.discs[di].vel = add(self.discs[di].vel, scale(normal, pkstr));
-                        self.discs[pi].vel =
-                            add(self.discs[pi].vel, scale(normal, -pkback * pinvmass));
+                let bim = self.discs[di].inv_mass;
+                let dx = bpos[0] - ppos[0];
+                let dy = bpos[1] - ppos[1];
+                let dist = (dx * dx + dy * dy).sqrt();
+                // Haxball: `4 > n - k.V - d.I.V` → dist - r_ball - r_player < 4.
+                if dist - self.discs[di].radius - pradius < 4.0 {
+                    if kick_allowed && dist > 0.0 {
+                        // normal via direct division (not reciprocal-multiply) and impulse
+                        // `f*l*k` = normal·kickStrength·invMass — game-min.js exact order.
+                        let nx = dx / dist;
+                        let ny = dy / dist;
+                        self.discs[di].vel[0] += nx * pkstr * bim;
+                        self.discs[di].vel[1] += ny * pkstr * bim;
+                        self.discs[pi].vel[0] += nx * -pkback * pinvmass;
+                        self.discs[pi].vel[1] += ny * -pkback * pinvmass;
                         player_has_kicked = true;
                     }
                 }
             }
             if player_has_kicked {
-                self.kick_cancel[k] = true;
+                self.kick_flag[k] = false;
+                self.kick_cooldown[k] = self.kick_rate_min;
+                self.kick_burst[k] -= self.kick_rate_cost;
             }
 
             // acceleration from input direction (normalized).
@@ -571,7 +731,11 @@ impl World {
             } else {
                 [0.0, 0.0]
             };
-            let a = if is_kicking {
+            // Acceleration uses the kick flag AFTER the kick loop: if the player just
+            // kicked a ball this tick, the flag is cleared, so the kick frame uses normal
+            // accel (0.10) — only "winding up" (armed, ball not yet kicked) uses the
+            // slower kicking accel (0.07). Verified bit-exact vs node-haxball.
+            let a = if self.kick_flag[k] {
                 self.discs[pi].kick_accel
             } else {
                 self.discs[pi].accel
@@ -583,15 +747,10 @@ impl World {
         let prev_ball = self.discs[0].pos;
         for k in 0..self.n_players {
             let pi = self.first_player + k;
-            let act = actions[k];
-            let is_kicking = act[2] == 1 && !self.kick_cancel[k];
+            let kf = self.kick_flag[k];
             let d = &mut self.discs[pi];
             d.pos = add(d.pos, d.vel);
-            let damping = if is_kicking {
-                d.kick_damping
-            } else {
-                d.damping
-            };
+            let damping = if kf { d.kick_damping } else { d.damping };
             d.vel = scale(add(d.vel, d.gravity), damping);
         }
         // non-player discs: only the ball moves (posts have inv_mass 0 but the
@@ -653,13 +812,18 @@ impl World {
                     self.discs[i].pos = pd;
                     self.discs[i].vel = v;
                 }
-                // segments (straight)
+                // segments (straight lines and curved arcs)
                 for s in &self.segments {
                     let d = &self.discs[i];
                     if !collides(d.cgroup, d.cmask, s.cgroup, s.cmask) {
                         continue;
                     }
-                    if let Some((dist, normal)) = segment_no_curve(d.pos, s.v0, s.v1) {
+                    let hit = if s.curve != 0.0 {
+                        segment_curve(d.pos, s.center, s.radius, s.tangent_0, s.tangent_1, s.curve)
+                    } else {
+                        segment_no_curve(d.pos, s.v0, s.v1)
+                    };
+                    if let Some((dist, normal)) = hit {
                         if let Some((dist, normal)) = segment_apply_bias(s.bias, dist, normal) {
                             let (pd, v) = segment_final(
                                 dist, normal, d.pos, d.vel, d.radius, d.bcoef, s.bcoef,

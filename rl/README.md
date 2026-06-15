@@ -1,57 +1,50 @@
-# rl — self-play training + play against the model
+# Train your first Haxball bot
 
-Trains a 1v1 Haxball policy on the headless Rust core (`../rust/haxball_core`) and
-lets you play against it.
+Minimal, readable examples for [`haxballgym`](../haxballgym) — go from a fresh network to a
+bot that crushes a hand-coded opponent, then play it yourself.
 
 ## Quickstart
 
-From the repo root (`uv sync` once to build the core + install deps):
-
 ```bash
-uv run rl/train.py              # ~4 min: PPO vs chase bot -> checkpoints/model.pt
-uv run rl/play.py               # YOU (red, arrows + X/space to kick) vs the model (blue)
-uv run rl/render_demo.py static # headless: writes demo.gif + frame.png
+# 1. train (a few minutes on a CPU; saves checkpoints/model.pt)
+uv run rl/train.py                 # ~600 iterations
+uv run rl/train.py --iters 1500    # train longer for a stronger bot
+
+# 2. play against it (arrows to move, X/Space to kick)
+uv run rl/play.py
 ```
 
-## Following a run live
+You'll watch `net vs chase` climb as it trains — that's goals-for minus goals-against against a
+"run at the ball and kick" baseline. A few hundred iterations is enough to comfortably beat it.
 
-Training streams metrics to **TensorBoard** by default (local, no account). In a
-second terminal:
+## What's here
 
-```bash
-uv run tensorboard --logdir rl/runs      # then open http://localhost:6006
-```
+| File | What it is |
+|---|---|
+| `train.py` | A self-contained **PPO self-play** trainer. The whole algorithm in ~200 lines. |
+| `play.py` | A pygame window to **play against your trained model** (you're red). |
 
-Logged series: `loss/{policy,value,entropy}`, `rollout/{reward,return,value}_mean`,
-`perf/decisions_per_s`, and `eval/chase_{goals,conceded,net}`. Prefer the cloud
-dashboard? `uv sync --extra wandb`, `uv run wandb login`, then `WANDB=1 uv run rl/train.py`.
+## How it works (the techniques)
 
-Config is a typed `Settings` model (`pydantic-settings`) — override any field via
-an env var or a `.env` file:
+All standard, published RL — nothing exotic:
 
-```bash
-ITERS=500 JIGGLE=0.2 DEV=mps RUN_NAME=exp1 uv run rl/train.py
-TB=0 uv run rl/train.py    # disable all tracking
-```
+- **PPO** with GAE for the policy update.
+- **Self-play with an 80/20 snapshot pool** (OpenAI Five): most of the time the opponent is a
+  frozen copy of the current policy; the rest of the time it's a random past snapshot, so the bot
+  keeps beating older strategies and doesn't cycle.
+- **Linear LR + entropy annealing** — explore early, sharpen late.
 
-## How it works (the RLGym playbook, minimal)
+The bot is a small MLP (256×2) acting every 8 physics ticks. Because the
+[engine](../rust/haxball_core) is a batched, bit-exact Rust port of Haxball, 512 matches step in
+parallel and a laptop CPU does tens of thousands of environment steps per second — so this trains
+fast without a GPU.
 
-- **Env**: the Rust `VecEnv` steps 512 matches in parallel. `tick_skip=8`
-  (~7.5 decisions/s), obs is goal-relative + side-aware so one shared net plays
-  red and blue with **no per-team mirroring** (the bug that breaks old HaxballGym).
-- **Reward**: a faithful port of WazBot's `CombinedReward` —
-  `VelocityPlayerToBall` (dense, non-zero-sum → no defensive collapse) +
-  `VelocityBallToGoal`. This is what makes it learn ball/shooting/goals in minutes.
-- **Algo**: vanilla PPO (CleanRL-style), shared-policy self-play, gamma from a 5s
-  half-life. Saves the best-vs-random checkpoint.
+## Where to go next
 
-Trains at ~46k decisions/s on CPU; within ~10 iterations it already scores. The
-current baseline understands ball control, shooting and goals but is over-aggressive
-(concedes too) — next levers: a defensive/own-goal-penalty reward term, longer
-training, and the BC warm-start below.
+`haxballgym` is fully composable — swap any piece to experiment:
 
-## Behavioral cloning from the 21k human replays (next)
-
-`replays.py` decodes the `.hbr2` container (done) and documents how to extract
-per-frame inputs; `bc_train.py` pretrains this same `Policy` to imitate humans,
-after which `train.py` finetunes from it — the Necto recipe. See those files.
+- **Observations** — write your own `ObsBuilder` (see `haxballgym/obs.py`).
+- **Rewards** — combine the provided reward terms, or add your own (`haxballgym/reward.py`).
+- **Episode starts** — `StateMutator`s let you start from kickoff, random positions, or your own
+  scenarios (`haxballgym/mutator.py`).
+- **Team sizes** — the same code trains 1v1 up to 4v4 (`make_default_env(n_envs, n_red, n_blue)`).

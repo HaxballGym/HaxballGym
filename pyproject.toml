@@ -4,9 +4,9 @@ version = "0.3.0"
 description = "Headless vectorized Haxball simulator for RL, plus training and in-browser play (uv workspace root)."
 requires-python = ">=3.12"
 dependencies = [
-    "haxball-core",     # rust/haxball_core  — the physics engine
-    "haxballgym",       # haxballgym/        — the composable env API
-    "haxballgym-rl",    # rl/                — training + play
+    "haxball-core",         # rust/haxball_core  — the physics engine
+    "haxballgym",           # haxballgym/        — the composable env API
+    "haxballgym-examples",  # rl/                — example train + play scripts
 ]
 
 [tool.uv.workspace]
@@ -15,7 +15,7 @@ members = ["rust/haxball_core", "haxballgym", "rl"]
 [tool.uv.sources]
 haxball-core = { workspace = true }
 haxballgym = { workspace = true }
-haxballgym-rl = { workspace = true }
+haxballgym-examples = { workspace = true }
 
 [dependency-groups]
 dev = [

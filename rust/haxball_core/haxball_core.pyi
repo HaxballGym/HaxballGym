@@ -50,10 +50,23 @@ class VecEnv:
         NDArray[np.float64],  # player_vel (N, P, 2)
         NDArray[np.int64],  # steps (N,)
     ]: ...
+    def set_state(
+        self,
+        ball_pos: NDArray[np.float64],  # (N, 2)
+        ball_vel: NDArray[np.float64],  # (N, 2)
+        player_pos: NDArray[np.float64],  # (N, P, 2)
+        player_vel: NDArray[np.float64],  # (N, P, 2)
+        steps: NDArray[np.int64] | None = ...,  # (N,)
+    ) -> None: ...
+    def set_kick_rate_limit(self, min: int, cost: int, cap: int) -> None: ...
     def teams(self) -> NDArray[np.int64]: ...
     def goals(
         self,
     ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]]: ...
+    def wall_segments(self) -> NDArray[np.float64]: ...  # (M, 4) ball-colliding walls [x0,y0,x1,y1]
+    def obstacle_discs(self) -> NDArray[np.float64]: ...  # (D, 3) static post discs [x, y, radius]
+    def set_player_cmask(self, mask: int) -> None: ...  # set every player disc's collision mask
+    def kick_state(self) -> tuple[NDArray[np.int64], NDArray[np.int64]]: ...  # per-player kick state
     def rollout_bench(self, n_steps: int) -> int: ...
 
 # fn_base.py mirrors used only by the fidelity test

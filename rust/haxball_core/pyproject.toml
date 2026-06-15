@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "haxball_core"
-version = "0.1.0"
+version = "0.3.0"
 description = "Headless, vectorized Haxball physics core (RocketSim-equivalent for Haxball)."
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.23"]   # the core stays dependency-light on purpose

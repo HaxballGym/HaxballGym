@@ -1,170 +1,68 @@
-"""Self-play... no — train the policy against a CHASE BOT on the headless core.
+"""Train your first Haxball bot — a clean, self-contained PPO self-play example.
 
-The learner plays a scripted chase bot (moves at the ball + kicks, with angular
-jiggle so it isn't on-rails). That forces real possession contests instead of the
-"just shove the ball right" behaviour you get vs random/static. The learner is put
-on RED in half the envs and BLUE in the other half, so one net becomes strong on
-both sides (the obs is goal-relative/side-aware -> no per-team mirroring).
+This is the *starting point*: a compact, readable trainer that takes a fresh network to a
+solid 1v1 bot (it comfortably crushes a hand-coded "chase the ball" opponent) in a few
+minutes on a CPU. It uses only standard, published techniques:
 
-Rewards = WazBot's CombinedReward (VelocityPlayerToBall + VelocityBallToGoal),
-in Rust; tick_skip=8; gamma from a 5s half-life. Vanilla PPO (CleanRL-style).
+  * PPO (Schulman et al. 2017) with GAE — the workhorse on-policy RL algorithm.
+  * Self-play with an 80/20 snapshot pool (OpenAI Five): 80 % of the time the opponent is a
+    frozen copy of the *current* policy (stay sharp), 20 % a past snapshot (don't forget how
+    to beat older strategies / avoid cycling).
+  * Linear learning-rate + entropy annealing (explore early, exploit late).
 
-Run:   uv run python train.py
-Saves: rl/checkpoints/model.pt = best-vs-chase checkpoint
+Everything runs on `haxballgym` — the batched, bit-exact Haxball simulator. The whole rollout
+crosses the Python⇄Rust boundary once per batch, so a small CPU does tens of thousands of
+environment steps per second.
+
+Run:
+    uv run rl/train.py                  # ~600 iters, saves rl/checkpoints/model.pt
+    uv run rl/train.py --iters 1500     # train longer for a stronger bot
+Then watch it play:  uv run rl/play.py
 """
 
-import json
-import math
+from __future__ import annotations
+
+import argparse
 import os
-import sys
-import time
 
 import numpy as np
 import torch
 import torch.nn as nn
-from loguru import logger
-from opponents import chase_bins
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from torch.distributions import Categorical
 
-from haxballgym import (
-    CombinedReward,
-    DefaultObs,
-    DiscreteAction,
-    Env,
-    GoalCondition,
-    GoalReward,
-    KickoffMutator,
-    TimeoutCondition,
-    TransitionEngine,
-    VelocityBallToGoal,
-    VelocityPlayerToBall,
-)
+from haxballgym import make_default_env
 
-# Clean console output: timestamp + level + message, no module noise.
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="<green>{time:HH:mm:ss}</green> <level>{level: <7}</level> {message}",
-    colorize=True,
-    level="INFO",
-)
+DEVICE = torch.device("cpu")  # tiny nets + a CPU-resident sim → CPU is fastest here
+HERE = os.path.dirname(__file__)
 
-
-class Settings(BaseSettings):
-    """Training config. Every field is overridable from the environment by its
-    upper-cased name, e.g. `ITERS=500 JIGGLE=0.2 DEV=mps WANDB=1 python train.py`,
-    or from a `.env` file in the working directory.
-    """
-
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
-
-    # run / compute
-    iters: int = 250
-    dev: str = "cpu"  # "cpu" | "mps" | "cuda"
-    jiggle: float = 0.30  # chase-bot angular jiggle (eval opponent only)
-
-    # self-play
-    selfplay: str = "direct"  # "direct" = both players are the current net (both train);
-    #                           "snapshot" = learner vs a frozen past snapshot from a pool
-    pool_size: int = 20  # snapshot mode: how many past snapshots to keep
-    snapshot_every: int = 10  # snapshot mode: add the current net to the pool every N iters
-
-    # live experiment tracking
-    tb: bool = True  # TensorBoard (local, no account)
-    wandb: bool = False  # Weights & Biases (cloud dashboard)
-    wandb_project: str = "haxballgym"
-    run_name: str = ""  # blank -> timestamped
-
-
-settings = Settings()
-
-
-def make_logger():
-    """Optional live experiment tracking. TensorBoard by default (local, no
-    account): `tensorboard --logdir rl/runs`. Set WANDB=1 for the cloud dashboard
-    (needs `pip install wandb` + `wandb login`). TB=0 disables all logging.
-
-    Returns a `log(step, **scalars)` callable and a `close()` callable.
-    """
-    if not settings.tb and not settings.wandb:
-        return (lambda step, **kw: None), (lambda: None)
-
-    run_name = settings.run_name or f"run_{time.strftime('%Y%m%d_%H%M%S')}"
-    logdir = os.path.join(os.path.dirname(__file__), "runs", run_name)
-
-    writers = []
-    if settings.tb:
-        try:
-            from torch.utils.tensorboard import SummaryWriter
-
-            writers.append(("tb", SummaryWriter(logdir)))
-            logger.info(
-                "tensorboard -> {}  |  view: tensorboard --logdir {}", logdir, os.path.dirname(logdir)
-            )
-        except Exception as e:  # tensorboard not installed -> degrade gracefully
-            logger.warning("tensorboard disabled ({}); pip install tensorboard to enable", e)
-
-    if settings.wandb:
-        try:
-            import wandb
-
-            wandb.init(project=settings.wandb_project, name=run_name)
-            writers.append(("wandb", wandb))
-            logger.info("wandb -> run '{}' in project '{}'", run_name, settings.wandb_project)
-        except Exception as e:
-            logger.warning("wandb disabled ({}); pip install wandb && wandb login to enable", e)
-
-    def log(step, **scalars):
-        for kind, w in writers:
-            if kind == "tb":
-                for k, v in scalars.items():
-                    w.add_scalar(k, v, step)
-            else:  # wandb
-                w.log(scalars, step=step)
-
-    def close():
-        for kind, w in writers:
-            if kind == "tb":
-                w.close()
-            else:
-                w.finish()
-
-    return log, close
-
-
-N_ENVS = 512
-STEP_LIMIT = 2000
-TICK_SKIP = 8
-T = 64
-TOTAL_ITERS = settings.iters
-CHASE_JIGGLE = settings.jiggle
-SELFPLAY = settings.selfplay
-POOL_SIZE = settings.pool_size
-SNAPSHOT_EVERY = settings.snapshot_every
-HALF_LIFE_S = 5.0
-FPS = 60 / TICK_SKIP
-GAMMA = math.exp(math.log(0.5) / (FPS * HALF_LIFE_S))
-LAM = 0.95
-CLIP, EPOCHS, N_MB = 0.2, 4, 8
+# ── hyper-parameters (sane defaults; tweak via CLI) ───────────────────────────────
+N_ENVS = 512        # parallel matches per rollout
+T = 64              # rollout length (policy steps) per iteration
+TICK_SKIP = 8       # physics ticks per policy decision (7.5 decisions/sec)
+GAMMA = 0.9817      # discount (~5 s half-life at this decision rate)
+LAM = 0.95          # GAE lambda
+CLIP = 0.2          # PPO clip
+EPOCHS, N_MB = 4, 8  # PPO epochs and minibatches per iteration
 LR = 3e-4
 ENT_COEF, VF_COEF, MAX_GRAD = 0.01, 0.5, 0.5
-DEVICE = torch.device(settings.dev)
-torch.set_num_threads(max(1, os.cpu_count() - 1))
-CKPT_DIR = os.path.join(os.path.dirname(__file__), "checkpoints")
-os.makedirs(CKPT_DIR, exist_ok=True)
-torch.manual_seed(0)
-np.random.seed(0)
+POOL_SIZE, SNAPSHOT_EVERY = 20, 10  # self-play snapshot pool
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_dim):
+    """A small MLP with a shared trunk and three discrete action heads (move-x, move-y,
+    kick) plus a value head. Discrete actions keep it simple and fast."""
+
+    def __init__(self, obs_dim: int, hidden: int = 256, depth: int = 2):
         super().__init__()
-        self.trunk = nn.Sequential(nn.Linear(obs_dim, 256), nn.Tanh(), nn.Linear(256, 256), nn.Tanh())
-        self.head_x = nn.Linear(256, 3)
-        self.head_y = nn.Linear(256, 3)
-        self.head_k = nn.Linear(256, 2)
-        self.value = nn.Linear(256, 1)
+        layers, d = [], obs_dim
+        for _ in range(depth):
+            layers += [nn.Linear(d, hidden), nn.Tanh()]
+            d = hidden
+        self.trunk = nn.Sequential(*layers)
+        self.head_x = nn.Linear(hidden, 3)  # dx ∈ {-1, 0, +1}
+        self.head_y = nn.Linear(hidden, 3)  # dy ∈ {-1, 0, +1}
+        self.head_k = nn.Linear(hidden, 2)  # kick ∈ {0, 1}
+        self.value = nn.Linear(hidden, 1)
 
     def forward(self, obs):
         h = self.trunk(obs)
@@ -185,220 +83,157 @@ class Policy(nn.Module):
         return logp, ent, v
 
 
-def make_env(n_envs, stadium=None):
-    """This bot's env config — compose the haxballgym pieces with the reward we want.
-    Reward = dense velocity shaping (WazBot) + a DEFENSIVE term that punishes the ball
-    drifting toward our own goal, so the agent learns to defend (not just attack).
-    This composition is research config; tune it freely (it lives here, not in the lib)."""
-    return Env(
-        TransitionEngine(n_envs, 1, 1, step_limit=STEP_LIMIT, tick_skip=TICK_SKIP, stadium=stadium),
-        DefaultObs(),
-        DiscreteAction(),
-        CombinedReward(
-            (VelocityPlayerToBall(), 1.0),
-            (VelocityBallToGoal(attacked=True), 1.0),  # offense: ball -> opponent goal
-            (VelocityBallToGoal(attacked=False), -1.0),  # defense: punish ball -> own goal
-            (GoalReward(), 5.0),
-        ),
-        GoalCondition(),
-        TimeoutCondition(STEP_LIMIT),
-        KickoffMutator(),
-    )
+def chase_action(obs_red, state, n_envs):
+    """A hand-coded 'run at the ball and kick' opponent — the sanity-check baseline a
+    trained bot should crush. Reads the raw state (not the obs) for clarity."""
+    d = state.ball_pos[:, None, :] - state.player_pos  # (N, P, 2) toward the ball
+    dx = np.sign(d[..., 0]).astype(np.int64) + 1
+    dy = np.sign(d[..., 1]).astype(np.int64) + 1
+    kick = (np.linalg.norm(d, axis=-1) < 30).astype(np.int64)
+    return np.stack([dx, dy, kick], -1)  # (N, P, 3)
 
 
 @torch.no_grad()
-def evaluate_vs(model, opponent="chase", n_envs=256, steps=400, seed=123, jiggle=CHASE_JIGGLE, stadium=None):
-    """Policy=RED (idx 0), opponent=BLUE (idx 1). Returns (red_goals, blue_goals)."""
-    rng = np.random.default_rng(seed)
-    env = make_env(n_envs, stadium=stadium)
-    obs = env.reset()  # (n, 2, od)
+def eval_vs_chase(model, n_envs=256, steps=400):
+    """Play the model (RED) vs the chase bot (BLUE); return (red_goals, blue_goals)."""
+    env = make_default_env(n_envs, 1, 1)
+    obs = env.reset()
     rg = bg = 0
+    od = obs.shape[-1]
     for _ in range(steps):
-        red = model.act(torch.as_tensor(obs[:, 0], dtype=torch.float32, device=DEVICE))[0].cpu().numpy()
-        if opponent == "chase":
-            blue = chase_bins(obs[:, 1], rng, jiggle=jiggle)
-        elif opponent == "random":
-            blue = np.stack(
-                [rng.integers(0, 3, n_envs), rng.integers(0, 3, n_envs), rng.integers(0, 2, n_envs)], 1
-            )
-        else:  # static
-            blue = np.tile([1, 1, 0], (n_envs, 1))
-        full = np.empty((n_envs, 2, 3), dtype=np.int64)
-        full[:, 0] = red
-        full[:, 1] = blue
+        red = model.act(torch.as_tensor(obs[:, :1].reshape(-1, od), dtype=torch.float32))[0]
+        red = red.numpy().reshape(n_envs, 1, 3)
+        blue = chase_action(obs[:, 1:], env.prev_state, n_envs)[:, 1:]
+        full = np.concatenate([red, blue], axis=1)
         obs, rew, term, trunc = env.step(full)
         d = term | trunc
         if d.any():
-            rr = rew[d, 0]  # red's reward on terminal envs
+            rr = rew[d, 0]
             rg += int((rr > 1.0).sum())
             bg += int((rr < -1.0).sum())
     return rg, bg
 
 
 def main():
-    env = make_env(N_ENVS)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--iters", type=int, default=600)
+    ap.add_argument("--hidden", type=int, default=256)
+    ap.add_argument("--depth", type=int, default=2)
+    ap.add_argument("--out", default=os.path.join(HERE, "checkpoints", "model.pt"))
+    args = ap.parse_args()
+
+    env = make_default_env(N_ENVS, 1, 1)
     obs_dim = env.obs_dim
-    # Players are flattened to 2N slots (env*2 + player). Two self-play modes:
-    #   "direct":   every slot is the current net and trains       -> B = 2N
-    #   "snapshot": one slot/env is the learner; the other is a frozen past snapshot
-    #               sampled from a pool. Only learner slots train   -> B = N
-    snapshot_mode = SELFPLAY == "snapshot"
-    if snapshot_mode:
-        learner_side = np.zeros(N_ENVS, dtype=np.int64)
-        learner_side[N_ENVS // 2 :] = 1  # learner red in half the envs, blue in the rest
-        learner_pos = np.arange(N_ENVS) * 2 + learner_side
-        opp_pos = np.arange(N_ENVS) * 2 + (1 - learner_side)
-        opp_pos_t = torch.as_tensor(opp_pos, device=DEVICE)
-        opp_model = Policy(obs_dim).to(DEVICE)
-        pool = []  # past snapshots (CPU state_dicts)
-        B = N_ENVS
-    else:
-        learner_pos = np.arange(2 * N_ENVS)
-        B = 2 * N_ENVS
-    learner_pos_t = torch.as_tensor(learner_pos, device=DEVICE)
+    P = env.n_players  # 2 for 1v1
+    print(f"obs_dim={obs_dim}  players={P}  envs={N_ENVS}  iters={args.iters}")
 
-    logger.info(
-        "self-play[{}] | device={} obs_dim={} train_slots={} gamma={:.4f} iters={}",
-        SELFPLAY, DEVICE, obs_dim, B, GAMMA, TOTAL_ITERS,
-    )
-    log, close_log = make_logger()
-    log(0, **{"hparams/gamma": GAMMA, "hparams/lr": LR, "hparams/n_envs": N_ENVS,
-              "hparams/tick_skip": TICK_SKIP})
-
-    model = Policy(obs_dim).to(DEVICE)
+    model = Policy(obs_dim, args.hidden, args.depth).to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
-    obs = env.reset().reshape(2 * N_ENVS, obs_dim)  # all 2N players, flattened
-    sp_rng = np.random.default_rng(2024)
+
+    # Self-play: the learner controls one team; half the envs it's red, half blue (one net
+    # plays both sides). The opponent is a frozen snapshot (current copy or a past one).
+    learner_side = np.zeros(N_ENVS, dtype=np.int64)
+    learner_side[N_ENVS // 2 :] = 1
+    lp, op = [], []
+    for e in range(N_ENVS):
+        mine, theirs = ([0], [1]) if learner_side[e] == 0 else ([1], [0])
+        lp.append(e * P + np.array(mine))
+        op.append(e * P + np.array(theirs))
+    learner_pos, opp_pos = np.concatenate(lp), np.concatenate(op)
+    learner_pos_t = torch.as_tensor(learner_pos)
+    opp_pos_t = torch.as_tensor(opp_pos)
+    opp_model = Policy(obs_dim, args.hidden, args.depth).to(DEVICE)
+    pool: list[dict] = []
+    B = len(learner_pos)
 
     def snapshot():
         return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
-    S_obs = torch.zeros(T, B, obs_dim, device=DEVICE)
-    S_bins = torch.zeros(T, B, 3, dtype=torch.long, device=DEVICE)
-    S_logp = torch.zeros(T, B, device=DEVICE)
-    S_val = torch.zeros(T, B, device=DEVICE)
-    S_rew = torch.zeros(T, B, device=DEVICE)
-    S_done = torch.zeros(T, B, device=DEVICE)
+    # rollout buffers
+    S = {k: torch.zeros(T, B, *s) for k, s in
+         {"obs": (obs_dim,), "bins": (3,), "logp": (), "val": (), "rew": (), "done": ()}.items()}
+    S["bins"] = S["bins"].long()
 
-    best = -1
-    t0 = time.perf_counter()
-    total = 0
-    for it in range(1, TOTAL_ITERS + 1):
-        if snapshot_mode:  # sample this iteration's frozen opponent from the pool
-            opp_model.load_state_dict(pool[sp_rng.integers(len(pool))] if pool else snapshot())
+    obs = env.reset().reshape(P * N_ENVS, obs_dim)
+    rng = np.random.default_rng(0)
+    best = -10**9
+
+    for it in range(1, args.iters + 1):
+        frac = (it - 1) / max(1, args.iters - 1)
+        lr_now = LR * (1 - frac) + 1e-4 * frac
+        for g in opt.param_groups:
+            g["lr"] = lr_now
+        ent_coef = ENT_COEF * (1 - frac) + 0.005 * frac
+
+        # pick this iteration's opponent: 80 % current copy, 20 % a past snapshot
+        use_pool = pool and rng.random() < 0.2
+        opp_model.load_state_dict(pool[rng.integers(len(pool))] if use_pool else snapshot())
 
         for t in range(T):
-            o = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)  # (2N, od)
+            o = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)
             with torch.no_grad():
                 bins, logp, val = model.act(o[learner_pos_t])
-            S_obs[t] = o[learner_pos_t]
-            S_bins[t] = bins
-            S_logp[t] = logp
-            S_val[t] = val
+            S["obs"][t], S["bins"][t], S["logp"][t], S["val"][t] = o[learner_pos_t], bins, logp, val
+            acts = np.empty((P * N_ENVS, 3), dtype=np.int64)
+            acts[learner_pos] = bins.numpy()
+            with torch.no_grad():
+                acts[opp_pos] = opp_model.act(o[opp_pos_t])[0].numpy()
+            nobs, rew, term, trunc = env.step(acts.reshape(N_ENVS, P, 3))
+            obs = nobs.reshape(P * N_ENVS, obs_dim)
+            done = np.repeat((term | trunc).astype(np.float32), P)
+            S["rew"][t] = torch.as_tensor(rew.reshape(P * N_ENVS)[learner_pos])
+            S["done"][t] = torch.as_tensor(done[learner_pos])
 
-            acts = np.empty((2 * N_ENVS, 3), dtype=np.int64)
-            acts[learner_pos] = bins.cpu().numpy()
-            if snapshot_mode:
-                with torch.no_grad():
-                    acts[opp_pos] = opp_model.act(o[opp_pos_t])[0].cpu().numpy()
-
-            nobs, rew, term, trunc = env.step(acts.reshape(N_ENVS, 2, 3))
-            obs = nobs.reshape(2 * N_ENVS, obs_dim)
-            done = np.repeat((term | trunc).astype(np.float32), 2)  # (2N,) both end together
-            S_rew[t] = torch.as_tensor(rew.reshape(2 * N_ENVS)[learner_pos], device=DEVICE)
-            S_done[t] = torch.as_tensor(done[learner_pos], device=DEVICE)
-            total += B
-
-        if snapshot_mode and it % SNAPSHOT_EVERY == 0:  # grow the opponent pool
+        if it % SNAPSHOT_EVERY == 0:  # grow the self-play pool
             pool.append(snapshot())
             if len(pool) > POOL_SIZE:
                 pool.pop(0)
 
+        # GAE advantages
         with torch.no_grad():
-            last_val = model(torch.as_tensor(obs, dtype=torch.float32, device=DEVICE)[learner_pos_t])[3]
-        adv = torch.zeros(T, B, device=DEVICE)
-        lastgae = torch.zeros(B, device=DEVICE)
+            last_val = model(torch.as_tensor(obs, dtype=torch.float32)[learner_pos_t])[3]
+        adv = torch.zeros(T, B)
+        last = torch.zeros(B)
         for t in reversed(range(T)):
-            nnt = 1.0 - S_done[t]
-            nv = last_val if t == T - 1 else S_val[t + 1]
-            delta = S_rew[t] + GAMMA * nv * nnt - S_val[t]
-            lastgae = delta + GAMMA * LAM * nnt * lastgae
-            adv[t] = lastgae
-        ret = adv + S_val
+            nnt = 1.0 - S["done"][t]
+            nv = last_val if t == T - 1 else S["val"][t + 1]
+            delta = S["rew"][t] + GAMMA * nv * nnt - S["val"][t]
+            last = delta + GAMMA * LAM * nnt * last
+            adv[t] = last
+        ret = adv + S["val"]
 
-        bo = S_obs.reshape(T * B, obs_dim)
-        bb = S_bins.reshape(T * B, 3)
-        bl = S_logp.reshape(T * B)
-        ba = adv.reshape(T * B)
-        br = ret.reshape(T * B)
+        bo, bb = S["obs"].reshape(T * B, obs_dim), S["bins"].reshape(T * B, 3)
+        bl, ba, br = S["logp"].reshape(-1), adv.reshape(-1), ret.reshape(-1)
         ba = (ba - ba.mean()) / (ba.std() + 1e-8)
         idx = np.arange(T * B)
         mb = (T * B) // N_MB
-        pls, vls, ents = [], [], []
         for _ in range(EPOCHS):
-            np.random.shuffle(idx)
+            rng.shuffle(idx)
             for s in range(0, T * B, mb):
-                mi = torch.as_tensor(idx[s : s + mb], device=DEVICE)
-                logp, ent, val = model.evaluate(bo[mi], bb[mi])
-                ratio = (logp - bl[mi]).exp()
+                mi = torch.as_tensor(idx[s : s + mb])
+                lp, ent, v = model.evaluate(bo[mi], bb[mi])
+                ratio = (lp - bl[mi]).exp()
                 a = ba[mi]
                 pl = -torch.min(ratio * a, torch.clamp(ratio, 1 - CLIP, 1 + CLIP) * a).mean()
-                vl = 0.5 * (val - br[mi]).pow(2).mean()
-                ent_m = ent.mean()
-                loss = pl + VF_COEF * vl - ENT_COEF * ent_m
+                vl = 0.5 * (v - br[mi]).pow(2).mean()
+                loss = pl + VF_COEF * vl - ent_coef * ent.mean()
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD)
                 opt.step()
-                pls.append(pl.item())
-                vls.append(vl.item())
-                ents.append(ent_m.item())
 
-        # --- per-iteration metrics (live in TensorBoard/W&B) ---
-        sps = total / (time.perf_counter() - t0)
-        log(
-            total,
-            **{
-                "loss/policy": float(np.mean(pls)),
-                "loss/value": float(np.mean(vls)),
-                "loss/entropy": float(np.mean(ents)),
-                "rollout/reward_mean": S_rew.mean().item(),
-                "rollout/return_mean": ret.mean().item(),
-                "rollout/value_mean": S_val.mean().item(),
-                "perf/decisions_per_s": sps,
-            },
-        )
-
-        if it % 10 == 0 or it == TOTAL_ITERS:
-            cg, cb = evaluate_vs(model, "chase", 256, 400)
-            net = cg - cb
-            saved = net >= best
-            if saved:
+        if it % 10 == 0 or it == args.iters:
+            rg, bg = eval_vs_chase(model)
+            net = rg - bg
+            tag = ""
+            if net >= best:
                 best = net
-                torch.save(model.state_dict(), os.path.join(CKPT_DIR, "model.pt"))
-                json.dump(
-                    {"obs_dim": obs_dim, "n_red": 1, "n_blue": 1},
-                    open(os.path.join(CKPT_DIR, "meta.json"), "w"),
-                )
-            log(total, **{"eval/chase_goals": cg, "eval/chase_conceded": cb, "eval/chase_net": net})
-            logger.info(
-                "it {:4d} | {:5.2f}M dec | {:4.0f}k dec/s | vs CHASE {:3d}:{:<3d} (net {:+d}){}",
-                it,
-                total / 1e6,
-                sps / 1e3,
-                cg,
-                cb,
-                net,
-                "  <- saved" if saved else "",
-            )
+                os.makedirs(os.path.dirname(args.out), exist_ok=True)
+                torch.save(model.state_dict(), args.out)
+                tag = "  <- saved"
+            print(f"it {it:4d} | lr {lr_now:.1e} | vs chase {rg:3d}:{bg:<3d} (net {net:+d}){tag}")
 
-    logger.success("best net-vs-chase: {:+d}", best)
-    m = Policy(obs_dim)
-    m.load_state_dict(torch.load(os.path.join(CKPT_DIR, "model.pt"), map_location=DEVICE))
-    for opp in ("chase", "random", "static"):
-        rg, bg = evaluate_vs(m, opp, 400, 600)
-        logger.info("  vs {:7s}: RED {} - {} BLUE", opp, rg, bg)
-    close_log()
+    print(f"\ndone. best net vs chase: +{best}.  saved -> {args.out}\n  play it:  uv run rl/play.py")
 
 
 if __name__ == "__main__":
