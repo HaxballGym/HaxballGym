@@ -40,6 +40,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --manifest-path rust/haxball_core/Cargo.toml --quiet
 
+      - name: Clone Ursinaxball (numpy reference for the fidelity cross-check)
+        run: git clone --depth 1 https://github.com/HaxballGym/Ursinaxball.git ../Ursinaxball
+
       - name: Tests
         run: |
           uv run rust/haxball_core/tests/test_fidelity.py

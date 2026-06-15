@@ -26,6 +26,12 @@ FN_BASE = os.path.join(
     "physics",
     "fn_base.py",
 )
+if not os.path.exists(os.path.abspath(FN_BASE)):
+    # The reference is the original numpy implementation, which lives in a separate repo.
+    # Clone it next to this one to run the cross-check:
+    #   git clone https://github.com/HaxballGym/Ursinaxball.git   (sibling of HaxballGym)
+    print(f"SKIP: Ursinaxball reference not found at {FN_BASE} — fidelity cross-check skipped.")
+    raise SystemExit(0)
 spec = importlib.util.spec_from_file_location("fn_base", os.path.abspath(FN_BASE))
 fb = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fb)
