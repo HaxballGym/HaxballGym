@@ -27,14 +27,25 @@ const BOT_ID = 65535;
 const RED = 1, BLUE = 2, SPEC = 0;
 
 // ── Policy (the trained MLP; weights from export_policy.py) ───────────────────
-const PX = 1 / 420, PY = 1 / 200, VS = 1 / 10, GOAL_X = 370;
+const VS = 1 / 10;
+// Obs normalization is map-aware and travels in policy.json (pos_coef/goal_x), so the room
+// obs matches what the bot trained on (futsal's bigger field needs a different scale than
+// classic). Absent fields fall back to the classic defaults. `let` so a reload updates them.
+let PX, PY, GOAL_X;
 const POLICY_PATH = path.join(__dirname, "policy.json");
 // `let` so we can HOT-RELOAD new weights live (the `!reload` command / file-watch) without
 // restarting the room — re-export policy.json, the running bot picks it up, same link.
 let P = JSON.parse(fs.readFileSync(POLICY_PATH, "utf8"));
 let roomRef = null; // set in onOpen; lets the file-watch announce the new bot in-room
+function applyObsParams() {
+  PX = P.pos_coef ? P.pos_coef[0] : 1 / 420;
+  PY = P.pos_coef ? P.pos_coef[1] : 1 / 200;
+  GOAL_X = P.goal_x != null ? P.goal_x : 370;
+}
+applyObsParams();
 function reloadPolicy() {
   P = JSON.parse(fs.readFileSync(POLICY_PATH, "utf8"));
+  applyObsParams(); // pick up the new bot's obs scaling too (not just weights)
   return P.obs_dim;
 }
 // auto-reload whenever policy.json changes on disk (so a fresh export swaps the bot instantly)
@@ -177,6 +188,13 @@ Room.create(
     storage: { player_name: "RL-Host" },
     onOpen: (room) => {
       roomRef = room; // for file-watch in-room announcements
+      // non-classic maps ship in policy.json; load the right pitch (futsal etc.) before play
+      if (P.stadium_hbs) {
+        try {
+          room.setCustomStadium(Utils.parseStadium(P.stadium_hbs));
+          console.log(`stadium -> ${P.stadium_name || "custom"}`);
+        } catch (e) { console.log("stadium load failed:", e.message); }
+      }
       room.fakePlayerJoin(BOT_ID, `🤖 RL · ${P.name || "bot"}`, "tr", "🤖", "fake-conn", "fake-auth");
       after(() => room.setPlayerTeam(BOT_ID, RED));
 
