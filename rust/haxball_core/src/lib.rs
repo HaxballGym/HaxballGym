@@ -82,8 +82,8 @@ impl VecEnv {
     }
 
     /// Build a batch from a Haxball `.hbs` stadium (plain JSON text). Geometry,
-    /// goals, spawns, and ball/player physics all come from the map. Curved
-    /// segments are skipped for now (logged to stderr).
+    /// goals, spawns, and ball/player physics all come from the map — including
+    /// curved wall segments (rounded corners, goal nets), so any map is faithful.
     #[staticmethod]
     #[pyo3(signature = (hbs, n_envs, n_red, n_blue, step_limit=2400, tick_skip=8))]
     fn from_hbs(
@@ -416,9 +416,9 @@ impl VecEnv {
 
     /// Ball-colliding WALLS as straight line segments `[x0,y0,x1,y1]`, shape (M, 4): each
     /// straight segment the ball hits, plus every ball-colliding boundary PLANE rendered as a
-    /// long segment. Curved segments are skipped (the core doesn't simulate them — matches the
-    /// physics). Static per stadium; lets a map-agnostic obs raycast the REAL geometry on ANY
-    /// map (so the bot can read rebounds / pin the ball for rockets anywhere).
+    /// long segment. Curved segments are omitted HERE only (this obs helper raycasts straight
+    /// lines) — the physics DOES resolve them. Static per stadium; lets a map-agnostic obs
+    /// raycast the REAL geometry on ANY map (so the bot can read rebounds / pin for rockets).
     fn wall_segments<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
         let w = &self.worlds[0];
         let mut segs: Vec<f64> = Vec::new();

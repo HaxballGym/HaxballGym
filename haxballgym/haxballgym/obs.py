@@ -29,14 +29,34 @@ class DefaultObs(ObsBuilder):
     """
 
     def __init__(self, pos_coef=(1.0 / 420.0, 1.0 / 200.0), vel_coef=1.0 / 10.0):
-        self.pos_coef = np.asarray(pos_coef, dtype=np.float64)
+        # pos_coef is a per-axis (cx, cy) scale, or the string "auto" to derive it from the
+        # stadium's field bounds on reset() — so positions land in ~[-1, 1] on ANY map
+        # (classic, futsal, ...), not just the classic-tuned default.
+        self._auto = isinstance(pos_coef, str) and pos_coef == "auto"
+        self.pos_coef = None if self._auto else np.asarray(pos_coef, dtype=np.float64)
         self.vel_coef = float(vel_coef)
+
+    def reset(self, state: GameState) -> None:
+        if self._auto:
+            self.pos_coef = self._derive_pos_coef(state)
+
+    @staticmethod
+    def _derive_pos_coef(state: GameState) -> np.ndarray:
+        # field half-extent from the real collision walls; drop the boundary planes, which
+        # wall_segments() renders as huge (±3000) segments. 1.1× margin leaves headroom for
+        # discs that penetrate a wall slightly (soft collision) so the obs stays within [-1, 1].
+        pts = np.asarray(state.walls, dtype=np.float64).reshape(-1, 2)
+        real = pts[np.abs(pts).max(axis=1) < 1500.0]
+        half = np.abs(real if len(real) else pts).max(axis=0)
+        return 1.0 / np.maximum(half * 1.1, 1.0)
 
     def obs_dim(self, n_players: int) -> int:
         return 12 + 4 * (n_players - 1)
 
     def build_obs(self, state: GameState) -> np.ndarray:
         n, p = state.n_envs, state.n_players
+        if self.pos_coef is None:  # auto mode, build_obs called without a prior reset()
+            self.pos_coef = self._derive_pos_coef(state)
         pc, vc = self.pos_coef, self.vel_coef
         ppos, pvel = state.player_pos, state.player_vel  # (N,P,2)
         bpos = state.ball_pos[:, None, :]  # (N,1,2)

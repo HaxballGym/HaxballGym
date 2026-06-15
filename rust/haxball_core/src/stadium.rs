@@ -5,9 +5,10 @@
 //! per-type defaults. Coordinates are y-flipped (vertices, disc/plane geometry,
 //! spawns), bias/curve are negated — exactly as `objects/base/*.py` do.
 //!
-//! Curved segments (goal nets, kickoff semicircles) are **skipped for now**: the
-//! collision core resolves straight segments + planes + discs, and the curved
-//! pieces are either cosmetic or kickoff-only. They're counted and reported.
+//! Curved segments (goal nets, kickoff semicircles, rounded corners) are fully
+//! resolved: `Segment::build` precomputes each arc's centre/radius/tangents and the
+//! collision core handles disc-vs-arc (`physics::segment_curve`), so maps like futsal
+//! are bit-faithful including their corners.
 
 use std::collections::HashMap;
 
@@ -188,7 +189,7 @@ fn make_disc(
 }
 
 /// Build a single-match `World` from `.hbs` JSON text.
-/// Returns the World and the number of (unsupported) curved segments skipped.
+/// Returns the World and a second field kept for API compat (always 0; curves are resolved).
 pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World, usize), String> {
     let s: RawStadium = serde_json::from_str(json).map_err(|e| format!("bad .hbs JSON: {e}"))?;
 
