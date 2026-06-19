@@ -1,6 +1,10 @@
 """Stadium (.hbs) loading. The parsing/geometry build lives in the Rust engine
 (`haxball_core.VecEnv.from_hbs`); this just resolves a name to its `.hbs` text.
 Bundled maps ship under `haxballgym/stadiums/`; or pass a path to any `.hbs`.
+
+The named maps are Haxball's official default stadiums, exported verbatim from
+node-haxball (the real engine) — so the geometry is exactly the game's. `futsal-classic`
+is the one extra non-default (custom) map kept for convenience.
 """
 
 from __future__ import annotations
@@ -8,7 +12,20 @@ from __future__ import annotations
 import importlib.resources as resources
 from pathlib import Path
 
-BUNDLED = ("classic", "futsal-classic", "big", "rounded")
+# Official Haxball default stadiums (from node-haxball) + the custom futsal map.
+BUNDLED = (
+    "classic",
+    "easy",
+    "small",
+    "big",
+    "big-easy",
+    "rounded",
+    "big-rounded",
+    "hockey",
+    "big-hockey",
+    "huge",
+    "futsal-classic",
+)
 
 
 def stadium_text(name_or_path: str) -> str:

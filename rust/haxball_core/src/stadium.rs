@@ -95,11 +95,27 @@ struct RawPlane {
 
 #[derive(Deserialize)]
 struct RawDisc {
-    pos: [f64; 2],
+    #[serde(default)]
+    pos: Option<[f64; 2]>, // the ball disc (official format) omits pos — spawns at centre
     #[serde(rename = "trait")]
     tr: Option<String>,
     #[serde(flatten)]
     props: Props,
+}
+
+/// `ballPhysics`: either an inline physics object (our dialect) OR the official Haxball
+/// `"discN"` string, meaning "the ball IS `discs[N]`" (that disc carries the ball's flags).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BallPhysics {
+    Ref(String),  // "disc0"
+    Inline(Props),
+}
+
+impl Default for BallPhysics {
+    fn default() -> Self {
+        BallPhysics::Inline(Props::default())
+    }
 }
 
 #[derive(Deserialize)]
@@ -148,7 +164,7 @@ struct RawStadium {
     #[serde(rename = "playerPhysics", default)]
     player_physics: RawPlayerPhysics,
     #[serde(rename = "ballPhysics", default)]
-    ball_physics: Props,
+    ball_physics: BallPhysics,
     #[serde(rename = "redSpawnPoints", default)]
     red_spawn: Vec<[f64; 2]>,
     #[serde(rename = "blueSpawnPoints", default)]
@@ -193,24 +209,44 @@ fn make_disc(
 pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World, usize), String> {
     let s: RawStadium = serde_json::from_str(json).map_err(|e| format!("bad .hbs JSON: {e}"))?;
 
-    // Ball: canonical collision flags; radius/mass/damping/bcoef from ballPhysics.
-    let bp = &s.ball_physics;
+    // Ball: canonical collision flags (ball|kick|score, mask ALL); physics from `ballPhysics`.
+    // Two dialects: an inline physics object, OR the official "discN" string where the ball IS
+    // discs[N] (so that disc must NOT also be added as a goalpost).
+    let (ball_props, ball_disc_idx) = match &s.ball_physics {
+        BallPhysics::Inline(p) => (p.clone(), None),
+        BallPhysics::Ref(r) => {
+            let idx = r
+                .strip_prefix("disc")
+                .and_then(|n| n.parse::<usize>().ok())
+                .ok_or_else(|| format!("ballPhysics ref {r:?} is not 'discN'"))?;
+            let d = s
+                .discs
+                .get(idx)
+                .ok_or_else(|| format!("ballPhysics {r} references a missing disc"))?;
+            (d.props.over(d.tr.as_ref().and_then(|t| s.traits.get(t))), Some(idx))
+        }
+    };
     let ball = make_disc(
         [0.0, 0.0],
-        bp.radius.unwrap_or(10.0),
-        bp.inv_mass.unwrap_or(1.0),
-        bp.damping.unwrap_or(0.99),
-        bp.b_coef.unwrap_or(0.5),
+        ball_props.radius.unwrap_or(10.0),
+        ball_props.inv_mass.unwrap_or(1.0),
+        ball_props.damping.unwrap_or(0.99),
+        ball_props.b_coef.unwrap_or(0.5),
         flag::BALL | flag::KICK | flag::SCORE,
         flag::ALL,
     );
 
-    // Goalposts (the .hbs `discs`), y-flipped; disc default cGroup/cMask = ALL.
+    // Goalposts: every `.hbs` disc EXCEPT the one that IS the ball. y-flipped; default cGroup/
+    // cMask = ALL.
     let mut discs = vec![ball];
-    for d in &s.discs {
+    for (i, d) in s.discs.iter().enumerate() {
+        if Some(i) == ball_disc_idx {
+            continue;
+        }
         let p = d.props.over(d.tr.as_ref().and_then(|t| s.traits.get(t)));
+        let pos = d.pos.unwrap_or([0.0, 0.0]);
         discs.push(make_disc(
-            [d.pos[0], -d.pos[1]],
+            [pos[0], -pos[1]],
             p.radius.unwrap_or(10.0),
             p.inv_mass.unwrap_or(1.0),
             p.damping.unwrap_or(0.99),
