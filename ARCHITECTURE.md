@@ -49,10 +49,16 @@ strong self-play is reachable on a single machine.
 
 ## The simulation contract
 
-`rust/haxball_core/tests/test_fidelity.py` feeds 25k random inputs through both the
-Rust core and Ursinaxball's pure-numpy `fn_base.py` and asserts agreement to 1e-9.
-**This is the contract that lets us trust the speed.** Any change under `physics.rs`
-must keep it green; new collision paths get a new fidelity case.
+`haxballgym/tests/test_real_engine.py` is the authoritative check: it replays ball
+trajectories captured from the **real Haxball engine** (game-min.js, via node-haxball —
+see `headless-bot/nh_oracle.js`) and asserts the Rust port reproduces them **bit-for-bit**
+(zero difference, every tick), on the official stadiums including curved walls. This holds
+because every op on the trajectory path is correctly-rounded f64 (+,-,*,/,sqrt) or the curve
+cotangent via the pure-Rust `libm::tan` (matching V8 deterministically across targets).
+`rust/haxball_core/tests/test_fidelity.py` additionally feeds 25k random inputs through both
+the Rust core and Ursinaxball's pure-numpy `fn_base.py` and asserts agreement to 1e-9.
+**These are the contract that lets us trust the speed.** Any change under `physics.rs` must
+keep them green; new collision paths get a new fidelity case.
 
 ## The env interface
 

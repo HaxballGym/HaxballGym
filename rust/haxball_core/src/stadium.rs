@@ -108,7 +108,7 @@ struct RawDisc {
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum BallPhysics {
-    Ref(String),  // "disc0"
+    Ref(String), // "disc0"
     Inline(Props),
 }
 
@@ -223,7 +223,10 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
                 .discs
                 .get(idx)
                 .ok_or_else(|| format!("ballPhysics {r} references a missing disc"))?;
-            (d.props.over(d.tr.as_ref().and_then(|t| s.traits.get(t))), Some(idx))
+            (
+                d.props.over(d.tr.as_ref().and_then(|t| s.traits.get(t))),
+                Some(idx),
+            )
         }
     };
     let ball = make_disc(

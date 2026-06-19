@@ -179,7 +179,9 @@ pub fn segment_curve(
         let dist_norm = norm(normal_circle);
         if dist_norm > 0.0 {
             let dist = dist_norm - circle_radius;
-            let normal = scale(normal_circle, 1.0 / dist_norm);
+            // Divide each component (engine: `H/=$$, W/=$$`), NOT multiply by the
+            // reciprocal: `x/d` and `x*(1/d)` round differently in f64.
+            let normal = [normal_circle[0] / dist_norm, normal_circle[1] / dist_norm];
             return Some((dist, normal));
         }
     }
@@ -302,9 +304,12 @@ pub struct Segment {
 
 impl Segment {
     /// Build a segment from raw `.hbs` data (vertices in native coords, `curve` in
-    /// degrees), replicating Ursinaxball `segment_object.py`: flip vertices in y,
-    /// negate curve/bias (the y-symmetry), fold the curve into its cotangent form, and
-    /// precompute the arc center/radius/tangents. `curve_deg == 0` → a straight segment.
+    /// degrees). The vertices/bias/curve are y-flipped into the engine's *mirror* segment
+    /// (every official stadium is y-symmetric, so the mirror exists and the negations are
+    /// exact); then the arc center/radius/tangents are computed by replicating game-min.js's
+    /// `calculate_curve` (`G5`) + `calculate_additional_properties` (`W_`) VERBATIM — same
+    /// operations, same order — so the curve collision path is bit-exact to the real engine.
+    /// `curve_deg == 0` (or a curve outside the engine's arc range) → a straight segment.
     pub fn build(
         v0_raw: Vec2,
         v1_raw: Vec2,
@@ -314,41 +319,51 @@ impl Segment {
         cgroup: i64,
         cmask: i64,
     ) -> Self {
-        use std::f64::consts::PI;
-        // Vertex.get_y_symmetry: y -> -y. Segment.get_y_symmetry_before: negate bias.
-        let mut a = [v0_raw[0], -v0_raw[1]];
-        let mut b = [v1_raw[0], -v1_raw[1]];
-        let mut bias = -bias_raw;
-        // Segment.calculate_curve: degrees -> radians, fold sign, cotangent form.
-        let mut cv = (-curve_deg) * PI / 180.0;
-        if cv < 0.0 {
-            cv = -cv;
-            std::mem::swap(&mut a, &mut b);
+        // y-flip into the mirror segment (vertex y -> -y, bias negated, curve negated).
+        let mut h = [v0_raw[0], -v0_raw[1]]; // engine `this.H.B`
+        let mut m = [v1_raw[0], -v1_raw[1]]; // engine `this.M.B`
+        let mut bias = -bias_raw; // engine `this.Z$`
+
+        // --- calculate_curve (G5): degrees -> radians, fold sign, cotangent form ---
+        let mut rad = (-curve_deg) * 0.017_453_292_519_943_295; // engine `h *= PI/180`
+        if rad < 0.0 {
+            rad = -rad;
+            std::mem::swap(&mut h, &mut m);
             bias = -bias;
         }
-        let curve = if cv > 0.174_358_392_274_233_53 && cv < 340.0 * PI / 180.0 {
-            1.0 / (cv / 2.0).tan()
+        // o$ defaults to +inf (straight); only an arc in (≈9.99°, 340°) gets a finite cotangent.
+        // Use the pure-Rust `libm::tan` (not `f64::tan`) so the one transcendental on the
+        // trajectory path is deterministic across targets and matches V8's `Math.tan` — the
+        // host libm can be 1 ULP off, which would break bit-exactness with the real engine.
+        let o = if 0.174_358_392_274_233_53 < rad && rad < 5.934_119_456_780_721 {
+            1.0 / libm::tan(rad / 2.0)
         } else {
-            cv
+            f64::INFINITY
         };
-        // Segment.calculate_additional_properties + get_y_symmetry_after (swap tangents).
-        let (mut center, mut radius) = ([0.0, 0.0], 0.0);
+
+        // --- calculate_additional_properties (W_) ---
+        let (mut center, mut radius, mut curve) = ([0.0, 0.0], 0.0, 0.0);
         let (mut t0, mut t1) = ([0.0, 0.0], [0.0, 0.0]);
-        if curve != 0.0 {
-            let vc = scale(sub(b, a), 0.5);
-            center = [a[0] + vc[0] - vc[1] * curve, a[1] + vc[1] + vc[0] * curve];
-            radius = norm(sub(b, center));
-            t0 = [-(a[1] - center[1]), a[0] - center[0]];
-            t1 = [b[1] - center[1], -(b[0] - center[0])];
-            if curve < 0.0 {
-                t0 = scale(t0, -1.0);
-                t1 = scale(t1, -1.0);
+        if o.is_finite() {
+            let f = 0.5 * (m[0] - h[0]);
+            let i = 0.5 * (m[1] - h[1]);
+            let cx = h[0] + f - i * o;
+            let cy = h[1] + i + f * o;
+            let fr = h[0] - cx;
+            let ir = h[1] - cy;
+            radius = (fr * fr + ir * ir).sqrt(); // engine `xr = sqrt(F*F + I*I)` from vertex0
+            t0 = [cy - h[1], h[0] - cx]; // engine `Uc`
+            t1 = [m[1] - cy, cx - m[0]]; // engine `uc`
+            if o <= 0.0 {
+                t0 = [-t0[0], -t0[1]];
+                t1 = [-t1[0], -t1[1]];
             }
-            std::mem::swap(&mut t0, &mut t1);
+            center = [cx, cy];
+            curve = o;
         }
         Segment {
-            v0: a,
-            v1: b,
+            v0: h,
+            v1: m,
             bcoef,
             bias,
             cgroup,

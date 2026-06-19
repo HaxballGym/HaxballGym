@@ -6,10 +6,16 @@ by driving node-haxball (the actual Haxball engine) deterministically — see
 the kickoff centre with a velocity and steps the engine tick-by-tick (no player input), so
 the ball bounces off walls / segments / curved corners / posts on a real official stadium.
 
-This test re-runs each scenario in the Rust port and asserts the ball trajectory matches the
-real engine to 1e-9. It needs no node at test time (the fixture is committed), and it is the
-authoritative cross-engine check (the older test_fidelity.py only checks collision primitives
-against Ursinaxball's numpy port).
+This test re-runs each scenario in the Rust port and asserts the ball trajectory is BIT-EXACT
+to the real engine (zero difference, every tick). It needs no node at test time (the fixture is
+committed), and it is the authoritative cross-engine check (the older test_fidelity.py only
+checks collision primitives against Ursinaxball's numpy port).
+
+Bit-exactness holds because every operation on the trajectory path is correctly-rounded f64
+(+,-,*,/,sqrt) or the curve cotangent, which goes through the pure-Rust `libm::tan` to match
+V8's `Math.tan` deterministically across targets. It is sensitive to stadium data: a curve of
+`89.99999999999999` (an `exportStadium` round-trip artifact) instead of `90` puts the cotangent
+1 ULP off and reintroduces a ~1e-12 drift, so the bundled `.hbs` files keep the clean values.
 
 Run: `uv run haxballgym/tests/test_real_engine.py`.
 """
@@ -22,7 +28,7 @@ import numpy as np
 from haxballgym import TransitionEngine
 
 FIXTURE = Path(__file__).parent / "fixtures" / "nh_ball_trajectories.json"
-TOL = 1e-9
+TOL = 0.0  # bit-exact: the port reproduces the real engine to the last bit
 
 
 def test_matches_real_engine():
@@ -45,10 +51,10 @@ def test_matches_real_engine():
         )
         d = float(np.abs(rust - oracle).max())
         worst = max(worst, d)
-        tag = "OK" if d < TOL else "FAIL"
+        tag = "OK" if d <= TOL else "FAIL"
         print(f"  {sc['stadium']:8s} {sc['n_red']}v{sc['n_blue']} {sc['ball_vel']} diff={d:.2e} {tag}")
-        assert d < TOL, f"{sc['stadium']} {sc['ball_vel']} diverges from the real engine by {d:.2e}"
-    print(f"\nMATCHES REAL HAXBALL ENGINE (node-haxball) to {worst:.2e} over {len(scenarios)} scenarios")
+        assert d <= TOL, f"{sc['stadium']} {sc['ball_vel']} diverges from the real engine by {d:.2e}"
+    print(f"\nBIT-EXACT vs the REAL HAXBALL ENGINE: worst diff {worst:.2e}, {len(scenarios)} scenarios")
 
 
 if __name__ == "__main__":
