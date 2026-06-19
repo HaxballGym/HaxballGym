@@ -27,5 +27,6 @@ test:  ## Run the test suite (physics fidelity + stadium-driven env)
 	uv run haxballgym/tests/test_stadium_geometry.py
 	uv run haxballgym/tests/test_stadium_loader.py
 	uv run haxballgym/tests/test_env.py
+	uv run haxballgym/tests/test_real_engine.py
 
 check: lint typecheck test  ## Everything CI runs (lint + typecheck + test)
