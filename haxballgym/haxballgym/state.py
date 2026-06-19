@@ -54,6 +54,11 @@ class GameState:
             match = self.goal_team[None, None, :] != self.team[:, :, None]
         else:
             match = self.goal_team[None, None, :] == self.team[:, :, None]
+        if not match.any(axis=-1).all():
+            # argmax would silently return goal 0; a player with no matching goal means a
+            # stadium with no goal for/against some team — surface it instead of lying.
+            side = "attacks" if attacked else "defends"
+            raise ValueError(f"goal_line: some player has no goal it {side} (stadium goal/team mismatch)")
         idx = np.argmax(match, axis=-1)  # (N, P) first match
         return self.goal_p0[idx], self.goal_p1[idx]  # (N, P, 2) each
 

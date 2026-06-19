@@ -74,13 +74,13 @@ class RandomStateMutator(StateSetterMutator):
         y_half: float = 150.0,
         pad: float = 30.0,
         ball_speed: float = 0.0,
-        rng: np.random.Generator | None = None,
+        rng: int | np.random.Generator | None = None,
     ):
         self.x_half = x_half
         self.y_half = y_half
         self.pad = pad
         self.ball_speed = ball_speed
-        self.rng = rng or np.random.default_rng()
+        self.rng = np.random.default_rng(rng)  # accepts an int seed, a Generator, or None
 
     def _bounds(self, engine: TransitionEngine) -> tuple[float, float]:
         if self.x_half is not None:
@@ -153,7 +153,7 @@ class ScenarioMutator(StateSetterMutator):
     def __init__(self, scenarios=None, x_half=None, y_half: float = 150.0, pad: float = 24.0, rng=None):
         self.scenarios = tuple(scenarios) if scenarios else self.ALL
         self.x_half, self.y_half, self.pad = x_half, y_half, pad
-        self.rng = rng or np.random.default_rng()
+        self.rng = np.random.default_rng(rng)  # accepts an int seed, a Generator, or None
 
     def _bounds(self, engine: TransitionEngine) -> tuple[float, float]:
         if self.x_half is not None:
@@ -241,7 +241,7 @@ class MultiSetter(StateSetterMutator):
         self.setters = list(setters)
         w = np.ones(len(self.setters)) if weights is None else np.asarray(weights, dtype=float)
         self.weights = w / w.sum()
-        self.rng = rng or np.random.default_rng()
+        self.rng = np.random.default_rng(rng)  # accepts an int seed, a Generator, or None
 
     def sample(self, engine: TransitionEngine, n: int):
         pick = self.rng.choice(len(self.setters), size=n, p=self.weights)
@@ -275,7 +275,7 @@ class ReplayStateMutator(StateSetterMutator):
         self.player_pos, self.player_vel = d["player_pos"], d["player_vel"]
         self.ftg = d["frames_to_goal"] if "frames_to_goal" in d else None
         self.m = len(self.ball_pos)
-        self.rng = rng or np.random.default_rng()
+        self.rng = np.random.default_rng(rng)  # accepts an int seed, a Generator, or None
         self.goal_bias = float(goal_bias)
 
     def _weights(self):

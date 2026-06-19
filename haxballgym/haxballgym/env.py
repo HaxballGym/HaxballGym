@@ -107,6 +107,9 @@ class Env:
         state = self.engine.step(engine_actions)
 
         terminated = self.termination_cond.is_done(state)  # (N,) goal scored this step
+        # In continuous mode this engine-tick `truncated` is overridden below by the decision
+        # clock (`_ep >= max_steps`); it still feeds the reward fn here, but the value RETURNED
+        # to the caller comes from the clock, so `truncation_cond` does not govern truncation then.
         truncated = self.truncation_cond.is_done(state)  # (N,) engine-tick timeout
         rewards = self.reward_fn.get_rewards(state, self.prev_state, terminated, truncated)
 
