@@ -282,77 +282,6 @@ pub struct Disc {
     pub team: i64, // RED / BLUE flag, 0 for ball/post
 }
 
-impl Disc {
-    fn ball() -> Self {
-        // Canonical classic Haxball ball (added by the stadium loader, not in .hbs).
-        Disc {
-            pos: [0.0, 0.0],
-            vel: [0.0, 0.0],
-            radius: 10.0,
-            inv_mass: 1.0,
-            damping: 0.99,
-            bcoef: 0.5,
-            gravity: [0.0, 0.0],
-            cgroup: flag::BALL | flag::KICK | flag::SCORE,
-            cmask: flag::ALL,
-            is_player: false,
-            accel: 0.0,
-            kick_accel: 0.0,
-            kick_damping: 0.0,
-            kick_strength: 0.0,
-            kickback: 0.0,
-            team: 0,
-        }
-    }
-    fn goalpost(pos: Vec2) -> Self {
-        // trait goalPost: radius 8, invMass 0, bCoef 0.5 (classic.hbs).
-        Disc {
-            pos,
-            vel: [0.0, 0.0],
-            radius: 8.0,
-            inv_mass: 0.0,
-            damping: 1.0,
-            bcoef: 0.5,
-            gravity: [0.0, 0.0],
-            cgroup: flag::WALL,
-            cmask: flag::ALL,
-            is_player: false,
-            accel: 0.0,
-            kick_accel: 0.0,
-            kick_damping: 0.0,
-            kick_strength: 0.0,
-            kickback: 0.0,
-            team: 0,
-        }
-    }
-    fn player(team: i64) -> Self {
-        // PlayerPhysics.apply_default_values() in player_physics.py.
-        Disc {
-            pos: [0.0, 0.0],
-            vel: [0.0, 0.0],
-            radius: 15.0,
-            inv_mass: 0.5,
-            damping: 0.96,
-            bcoef: 0.5,
-            gravity: [0.0, 0.0],
-            // Player disc collision: cGroup is just the team flag (Ursinaxball default
-            // group = NONE + team). Crucially it does NOT include `ball`, so players pass
-            // through the ballArea segments (cMask=ball, the x=±370 walls) into the goal
-            // area, like real Haxball. cMask omits redKO/blueKO so players aren't blocked
-            // by the kickoff barriers during normal play (we don't model the kickoff lock).
-            cgroup: team,
-            cmask: flag::PLAYER_COLLISION,
-            is_player: true,
-            accel: 0.1,
-            kick_accel: 0.07,
-            kick_damping: 0.96,
-            kick_strength: 5.0,
-            kickback: 0.0,
-            team,
-        }
-    }
-}
-
 /// A static segment, straight or a circular arc (goal nets, kickoff semicircles).
 /// For a straight segment `curve == 0` and only `v0/v1` matter; for an arc the
 /// precomputed `center/radius/tangent_0/tangent_1` drive `segment_curve`.
@@ -473,7 +402,21 @@ pub struct World {
     pub spawn_distance: f64,  // stadium spawnDistance (kickoff spread)
     pub red_spawn: Vec<Vec2>, // explicit spawn points (else the spawn_distance formula)
     pub blue_spawn: Vec<Vec2>,
+    // Game state machine (game-min.js `this.Cb`): 0 = KICKOFF, 1 = PLAYING. During KICKOFF the
+    // non-kicking team is held behind the centre semicircle (every player's cMask gains the
+    // kicking team's KO group, `.i = 39 | this.le.Lp`); the lock releases the moment the ball's
+    // velocity becomes non-zero. `kicking_team` is RED at kickoff and becomes the conceding team
+    // after a goal.
+    pub state: u8,
+    pub kicking_team: i64,
+    // GOAL-state countdown (game-min.js `this.zc`): on a goal the game enters the GOAL state and
+    // freezes scoring for `goal_timer` ticks (the celebration) before re-kickoff. 150 in vanilla.
+    pub goal_timer: i64,
 }
+
+pub const STATE_KICKOFF: u8 = 0;
+pub const STATE_PLAYING: u8 = 1;
+pub const STATE_GOAL: u8 = 2;
 
 const HALF_GOAL: f64 = 64.0; // classic goal mouth spans y in [-64, 64]
 
@@ -491,136 +434,15 @@ fn row_offset(i: usize) -> f64 {
 
 impl World {
     /// Build a classic-stadium match with `n_red` vs `n_blue` players.
+    /// Build a classic-stadium match with `n_red` vs `n_blue` players by parsing the canonical
+    /// `classic.hbs` embedded in the crate — the SAME path as `from_hbs("classic")`, so the
+    /// default (`stadium=None`) and the loaded classic stadium are identical by construction
+    /// (no hand-maintained duplicate to drift, which was the source of an earlier kickoff bug).
     pub fn classic(n_red: usize, n_blue: usize) -> Self {
-        let mut discs = Vec::new();
-        discs.push(Disc::ball());
-        // 4 goalposts (classic.hbs discs).
-        for p in [
-            [-370.0, 64.0],
-            [-370.0, -64.0],
-            [370.0, 64.0],
-            [370.0, -64.0],
-        ] {
-            discs.push(Disc::goalpost(p));
-        }
-        let first_player = discs.len();
-        for _ in 0..n_red {
-            discs.push(Disc::player(flag::RED));
-        }
-        for _ in 0..n_blue {
-            discs.push(Disc::player(flag::BLUE));
-        }
-
-        // ballArea straight segments at x = ±370 (ball containment, leaves goal
-        // mouth open between y=-64..64). cMask = ball, bCoef = 1.
-        let seg = |v0: Vec2, v1: Vec2| Segment {
-            v0,
-            v1,
-            bcoef: 1.0,
-            bias: 0.0,
-            cgroup: flag::WALL,
-            cmask: flag::BALL,
-            curve: 0.0,
-            center: [0.0, 0.0],
-            radius: 0.0,
-            tangent_0: [0.0, 0.0],
-            tangent_1: [0.0, 0.0],
-        };
-        let mut segments = vec![
-            seg([-370.0, 170.0], [-370.0, 64.0]),
-            seg([-370.0, -64.0], [-370.0, -170.0]),
-            seg([370.0, 170.0], [370.0, 64.0]),
-            seg([370.0, -64.0], [370.0, -170.0]),
-        ];
-        // Curved goal-net arcs (collide with the ball) + the inert kickoff-barrier
-        // semicircles, built from the exact classic.hbs raw coords so they are
-        // byte-identical to `world_from_hbs("classic")` (test_stadium_loader).
-        let net = |v0, v1, curve| Segment::build(v0, v1, curve, 0.0, 0.1, flag::WALL, flag::BALL);
-        segments.push(net([-380.0, -64.0], [-400.0, -44.0], -90.0));
-        segments.push(net([-400.0, 44.0], [-380.0, 64.0], -90.0));
-        segments.push(net([380.0, -64.0], [400.0, -44.0], 90.0));
-        segments.push(net([400.0, 44.0], [380.0, 64.0], 90.0));
-        let bar = |group| {
-            Segment::build(
-                [0.0, 75.0],
-                [0.0, -75.0],
-                180.0,
-                0.0,
-                0.1,
-                group,
-                flag::RED | flag::BLUE,
-            )
-        };
-        segments.push(bar(flag::BLUEKO)); // curve +180, cGroup blueKO (classic.hbs)
-                                          // the redKO barrier is the curve=-180 twin; build it explicitly
-        segments.push(Segment::build(
-            [0.0, 75.0],
-            [0.0, -75.0],
-            -180.0,
-            0.0,
-            0.1,
-            flag::REDKO,
-            flag::RED | flag::BLUE,
-        ));
-
-        // Planes (classic.hbs). ballArea planes constrain the ball top/bottom
-        // (cMask ball, bCoef 1); the bCoef 0.1 planes constrain players.
-        let plane = |normal: Vec2, dist: f64, bcoef: f64, cmask: i64| Plane {
-            normal,
-            dist,
-            bcoef,
-            cgroup: flag::WALL,
-            cmask,
-        };
-        // NOTE: this hardcoded classic is UNUSED for stadium="classic" (that path loads
-        // the real classic.hbs via from_hbs). Kept only as the `stadium=None` fallback;
-        // values mirror classic.hbs (player-containment planes bCoef 0.1).
-        let planes = vec![
-            plane([0.0, 1.0], -170.0, 1.0, flag::BALL),
-            plane([0.0, -1.0], -170.0, 1.0, flag::BALL),
-            plane([0.0, 1.0], -200.0, 0.1, flag::ALL),
-            plane([0.0, -1.0], -200.0, 0.1, flag::ALL),
-            plane([1.0, 0.0], -420.0, 0.1, flag::ALL),
-            plane([-1.0, 0.0], -420.0, 0.1, flag::ALL),
-        ];
-
-        let goals = vec![
-            Goal {
-                p0: [-370.0, 64.0],
-                p1: [-370.0, -64.0],
-                team: flag::RED,
-            },
-            Goal {
-                p0: [370.0, 64.0],
-                p1: [370.0, -64.0],
-                team: flag::BLUE,
-            },
-        ];
-
-        let n_players = n_red + n_blue;
-        let mut w = World {
-            discs,
-            n_players,
-            first_player,
-            segments,
-            planes,
-            goals,
-            red_score: 0,
-            blue_score: 0,
-            steps: 0,
-            kick_flag: vec![false; n_players],
-            kick_held_prev: vec![false; n_players],
-            kick_cooldown: vec![0; n_players],
-            kick_burst: vec![0; n_players],
-            kick_rate_min: 2,
-            kick_rate_cost: 0,
-            kick_rate_cap: 1,
-            spawn_distance: 277.5, // classic
-            red_spawn: Vec::new(),
-            blue_spawn: Vec::new(),
-        };
-        w.reset_positions();
-        w
+        const CLASSIC_HBS: &str = include_str!("stadiums/classic.hbs");
+        crate::stadium::world_from_hbs(CLASSIC_HBS, n_red, n_blue)
+            .expect("bundled classic.hbs is valid")
+            .0
     }
 
     /// Reset ball to center and players to spawn points (game.reset_discs_positions).
@@ -651,13 +473,20 @@ impl World {
                 blue_i += 1;
             }
         }
-        // a kickoff is a fresh play: clear per-player kick state
+        // a kickoff is a fresh play: clear per-player kick state + restore the normal cMask
+        // (game-min.js `al()` copies the stadium discs back, so cMask reverts to 39).
         for k in 0..self.n_players {
             self.kick_flag[k] = false;
             self.kick_held_prev[k] = false;
             self.kick_cooldown[k] = 0;
             self.kick_burst[k] = 0;
+            self.discs[self.first_player + k].cmask = flag::PLAYER_COLLISION;
         }
+        // back to the KICKOFF state (Cb = 0). `kicking_team` is left as-is: after a goal it was
+        // set to the conceding team (game-min.js `this.le = d`); a fresh game/episode sets it to
+        // RED explicitly via the VecEnv reset path.
+        self.state = STATE_KICKOFF;
+        self.goal_timer = 0;
     }
 
     /// One physics tick. `actions` is [n_players][3] = (dx, dy, kick).
@@ -777,9 +606,49 @@ impl World {
 
         // --- resolve collisions (physics_handler.resolve_collisions) ---
         self.resolve_collisions();
-
-        // --- goal detection (game.check_goal) ---
         self.steps += 1;
+
+        // --- game state machine (game-min.js `this.Cb`, run AFTER the physics update so the
+        // cMask set here gates the NEXT tick's collisions, exactly like the original) ---
+        if self.state == STATE_KICKOFF {
+            // hold the non-kicking team behind the centre semicircle: every player's cMask gains
+            // the kicking team's KO group (`.i = 39 | this.le.Lp`). No goal can occur during a
+            // kickoff (game-min.js only checks goals in Cb == 1).
+            let ko = if self.kicking_team == flag::RED {
+                flag::REDKO
+            } else {
+                flag::BLUEKO
+            };
+            for k in 0..self.n_players {
+                self.discs[self.first_player + k].cmask = flag::PLAYER_COLLISION | ko;
+            }
+            // kickoff is "made" the instant the ball moves (ball.G.x^2 + ball.G.y^2 > 0 -> Cb = 1).
+            let bv = self.discs[0].vel;
+            if bv[0] * bv[0] + bv[1] * bv[1] > 0.0 {
+                self.state = STATE_PLAYING;
+            }
+            None
+        } else if self.state == STATE_PLAYING {
+            // PLAYING: drop the barrier (cMask = 39) and check for goals.
+            for k in 0..self.n_players {
+                self.discs[self.first_player + k].cmask = flag::PLAYER_COLLISION;
+            }
+            self.score_goal(prev_ball)
+        } else {
+            // GOAL (game-min.js Cb = 2): the 150-tick goal celebration. Physics keeps running (the
+            // ball sits in the net, players move on) while `goal_timer` counts down; at zero the
+            // game re-kickoffs (al()) -> KICKOFF, with the conceding team kicking off.
+            self.goal_timer -= 1;
+            if self.goal_timer <= 0 {
+                self.reset_positions(); // kicking_team (conceding) is preserved by reset_positions
+            }
+            None
+        }
+    }
+
+    /// game.check_goal + score/kickoff bookkeeping. Returns the conceding team on a goal and enters
+    /// the GOAL celebration state (game-min.js: Cb = 2, zc = 150, le = conceding team).
+    fn score_goal(&mut self, prev_ball: Vec2) -> Option<i64> {
         let cur_ball = self.discs[0].pos;
         if let Some(team) = self.check_goal(prev_ball, cur_ball) {
             if team == flag::RED {
@@ -787,6 +656,9 @@ impl World {
             } else {
                 self.red_score += 1;
             }
+            self.kicking_team = team; // the conceding team kicks off next (game-min.js `this.le = d`)
+            self.state = STATE_GOAL;
+            self.goal_timer = 150;
             return Some(team);
         }
         None

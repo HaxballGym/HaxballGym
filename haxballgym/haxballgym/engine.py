@@ -24,9 +24,21 @@ class TransitionEngine:
         stadium: str | None = None,
         predict_offsets: list[int] | None = None,
     ):
-        # tick offsets at which to attach deterministic ball-trajectory prediction to each
-        # state (for a lookahead obs); None = off (no prediction computed).
-        self._predict_offsets = [int(o) for o in predict_offsets] if predict_offsets else None
+        # PHYSICS-tick offsets (not decisions!) at which to attach deterministic ball-trajectory
+        # prediction to each state (for a lookahead obs); None = off. Since the env advances
+        # `tick_skip` physics ticks per decision, a horizon of K decisions is `tick_skip*K` here
+        # (e.g. tick_skip=8 -> [8, 16, 24]); offsets like [1,2,3] look only a fraction of one
+        # decision ahead. predict_ball assumes STRICTLY ASCENDING, POSITIVE offsets.
+        if predict_offsets:
+            self._predict_offsets = [int(o) for o in predict_offsets]
+            if self._predict_offsets[0] < 1 or any(
+                b <= a for a, b in zip(self._predict_offsets, self._predict_offsets[1:], strict=False)
+            ):
+                raise ValueError(
+                    f"predict_offsets must be strictly ascending positive ticks; got {self._predict_offsets}"
+                )
+        else:
+            self._predict_offsets = None
         if stadium is None:
             self._e = hc.VecEnv(n_envs, n_red, n_blue, step_limit=step_limit, tick_skip=tick_skip)
         else:

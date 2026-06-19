@@ -1,6 +1,6 @@
 [project]
 name = "haxballgym-examples"
-version = "0.3.0"
+version = "1.0.0"
 description = "Example scripts for haxballgym — train your first Haxball bot with PPO self-play, then play it."
 requires-python = ">=3.12"
 dependencies = [

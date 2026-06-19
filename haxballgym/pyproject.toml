@@ -4,13 +4,30 @@ build-backend = "hatchling.build"
 
 [project]
 name = "haxballgym"
-version = "0.3.0"
+version = "1.0.0"
 description = "Composable, batched RLGym-v2-style env over the headless haxball_core engine."
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+authors = [{ name = "Wazarr", email = "jeje_04@live.com" }]
+keywords = ["haxball", "reinforcement-learning", "rlgym", "gym", "rl"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Games/Entertainment :: Simulation",
+]
 dependencies = [
-    "haxball-core",
+    "haxball-core>=1.0.0,<2.0.0",   # native core; APIs are version-coupled, so pin the major
     "numpy>=1.23",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HaxballGym/HaxballGym"
+Repository = "https://github.com/HaxballGym/HaxballGym"
+Issues = "https://github.com/HaxballGym/HaxballGym/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["haxballgym"]   # ships haxballgym/stadiums/*.hbs as package data

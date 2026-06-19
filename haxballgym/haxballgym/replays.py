@@ -226,7 +226,7 @@ def read_room_state(r: Reader):
     room["in_progress"] = r.u8() != 0
     # When a match is live, its physics snapshot (ball + every disc) precedes the
     # player list. We keep it so a re-simulation can be *seeded* from the recorded
-    # state instead of the kickoff — see rl/build_bc_dataset.py.
+    # state instead of the kickoff (via ReplayStateMutator).
     room["physics"] = read_physics_state(r) if room["in_progress"] else None
     room["players"] = read_list(r, read_player)
     read_team_state(r)  # red

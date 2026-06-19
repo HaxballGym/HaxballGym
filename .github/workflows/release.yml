@@ -1,0 +1,139 @@
+name: Release
+
+# Publishes haxball_core (Rust extension wheels) and haxballgym (pure-Python)
+# to PyPI via Trusted Publishing (OIDC — no API tokens stored).
+#
+# To cut a release: bump the versions, commit, then push a tag:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Use workflow_dispatch to dry-run the build jobs without publishing.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CORE_DIR: rust/haxball_core
+  PY_INTERPRETERS: "3.12 3.13"
+
+jobs:
+  # ---- haxball_core: compiled wheels, one job per platform ----------------
+  core-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.CORE_DIR }}
+          target: ${{ matrix.target }}
+          manylinux: auto
+          sccache: "true"
+          args: --release --out dist --interpreter ${{ env.PY_INTERPRETERS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-wheels-linux-${{ matrix.target }}
+          path: ${{ env.CORE_DIR }}/dist
+
+  core-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [aarch64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.CORE_DIR }}
+          target: ${{ matrix.target }}
+          args: --release --out dist --interpreter ${{ env.PY_INTERPRETERS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-wheels-macos-${{ matrix.target }}
+          path: ${{ env.CORE_DIR }}/dist
+
+  core-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.CORE_DIR }}
+          target: x64
+          args: --release --out dist --interpreter ${{ env.PY_INTERPRETERS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-wheels-windows
+          path: ${{ env.CORE_DIR }}/dist
+
+  core-sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.CORE_DIR }}
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-sdist
+          path: ${{ env.CORE_DIR }}/dist
+
+  # ---- haxballgym: pure-Python wheel + sdist ------------------------------
+  gym-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: uv build --package haxballgym --out-dir gym-dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gym-dist
+          path: gym-dist
+
+  # ---- publish (trusted publishing; runs only on tag pushes) -------------
+  publish-core:
+    needs: [core-linux, core-macos, core-windows, core-sdist]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  publish-gym:
+    needs: [gym-build, publish-core]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gym-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

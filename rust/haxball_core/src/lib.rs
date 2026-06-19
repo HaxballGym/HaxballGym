@@ -42,7 +42,12 @@ impl VecEnv {
         12 + 4 * (n_players - 1)
     }
 
-    fn check_players(n_red: usize, n_blue: usize) -> PyResult<()> {
+    fn check_dims(n_envs: usize, n_red: usize, n_blue: usize) -> PyResult<()> {
+        if n_envs == 0 {
+            // an empty batch leaves `worlds` empty, then every getter (teams/goals/walls/...)
+            // indexes worlds[0] and panics across the FFI boundary — reject it up front.
+            return Err(PyValueError::new_err("n_envs must be >= 1"));
+        }
         let n = n_red + n_blue;
         if n == 0 {
             return Err(PyValueError::new_err("n_red + n_blue must be >= 1"));
@@ -69,7 +74,7 @@ impl VecEnv {
         step_limit: u64,
         tick_skip: u64,
     ) -> PyResult<Self> {
-        Self::check_players(n_red, n_blue)?;
+        Self::check_dims(n_envs, n_red, n_blue)?;
         let worlds = (0..n_envs).map(|_| World::classic(n_red, n_blue)).collect();
         let n_players = n_red + n_blue;
         Ok(VecEnv {
@@ -94,7 +99,7 @@ impl VecEnv {
         step_limit: u64,
         tick_skip: u64,
     ) -> PyResult<Self> {
-        Self::check_players(n_red, n_blue)?;
+        Self::check_dims(n_envs, n_red, n_blue)?;
         let (world, _skipped) =
             stadium::world_from_hbs(hbs, n_red, n_blue).map_err(PyValueError::new_err)?;
         let n_players = n_red + n_blue;
@@ -126,13 +131,14 @@ impl VecEnv {
     // (those live in the composable Python layer). See docs/design-docs/env-api.md.
     // =======================================================================
 
-    /// Reset every env: positions, scores, step counter.
+    /// Reset every env: positions, scores, step counter. A fresh game -> RED kicks off.
     fn reset_all(&mut self) {
         for w in self.worlds.iter_mut() {
             w.reset_positions();
             w.red_score = 0;
             w.blue_score = 0;
             w.steps = 0;
+            w.kicking_team = flag::RED;
         }
     }
 
@@ -152,6 +158,7 @@ impl VecEnv {
                 w.red_score = 0;
                 w.blue_score = 0;
                 w.steps = 0;
+                w.kicking_team = flag::RED;
             }
         });
         Ok(())
@@ -317,6 +324,9 @@ impl VecEnv {
                 w.kick_burst[k] = 0;
             }
             w.steps = steps.as_ref().map_or(0, |s| s[ei] as u64);
+            // An explicit state is an arbitrary mid-play position (random spawns, scenario
+            // drills, a seeded replay frame) — NOT a kickoff, so no centre-circle lock.
+            w.state = physics::STATE_PLAYING;
         }
         Ok(())
     }

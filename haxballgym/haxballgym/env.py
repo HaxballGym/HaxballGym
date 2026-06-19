@@ -35,6 +35,8 @@ class Env:
         truncation_cond: DoneCondition,
         state_mutator: StateMutator,
         action_stack: int = 0,
+        continuous: bool = False,
+        max_steps: int = 0,
     ):
         self.engine = engine
         self.obs_builder = obs_builder
@@ -44,6 +46,17 @@ class Env:
         self.truncation_cond = truncation_cond
         self.state_mutator = state_mutator
         self.prev_state = None
+        # Continuous play (Nexto/Seer-style): a goal re-kickoffs but does NOT end the episode; the
+        # episode runs `max_steps` decisions, spanning many goals/kickoffs. A re-kickoff zeros the
+        # engine's tick counter, so we keep our own per-env decision clock `_ep`.
+        self.continuous = bool(continuous)
+        self.max_steps = int(max_steps)
+        if self.continuous and self.max_steps <= 0:
+            raise ValueError(
+                "continuous=True needs max_steps > 0 (the episode length in decisions, spanning "
+                f"many goals/kickoffs); got {self.max_steps}. Without it every step would time out."
+            )
+        self._ep = np.zeros(self.engine.n_envs, dtype=np.int64)  # per-env decision clock
         # DefaultObs mirrors the x-axis for blue (so both sides see "attacking +x");
         # undo that mirror on the action's dx so blue moves the right way in the world.
         self._mirror_x = np.where(engine._teams == RED, 1, -1)  # (N, P): +1 red, -1 blue
@@ -81,6 +94,7 @@ class Env:
         ):
             c.reset(state)
         self.prev_state = state
+        self._ep = np.zeros(self.n_envs, dtype=np.int64)
         obs = self.obs_builder.build_obs(state)
         if self.action_stack:
             self._act_buf = np.zeros((self.n_envs, self.n_players, 3 * self.action_stack), dtype=np.float32)
@@ -92,14 +106,31 @@ class Env:
         engine_actions[..., 0] *= self._mirror_x  # un-mirror dx for blue
         state = self.engine.step(engine_actions)
 
-        terminated = self.termination_cond.is_done(state)  # (N,)
-        truncated = self.truncation_cond.is_done(state)  # (N,)
+        terminated = self.termination_cond.is_done(state)  # (N,) goal scored this step
+        truncated = self.truncation_cond.is_done(state)  # (N,) engine-tick timeout
         rewards = self.reward_fn.get_rewards(state, self.prev_state, terminated, truncated)
 
-        done = terminated | truncated
-        if done.any():
-            self.state_mutator.reset_mask(self.engine, done)
-            state = self.engine.snapshot()  # refreshed post-reset
+        if self.continuous:
+            # a goal is NOT terminal here: the Rust core runs the 150-tick goal celebration
+            # (game-min.js Cb==2) and then re-kickoffs itself (conceding team, score kept), exactly
+            # as a live game / the replay does — the env just keeps stepping. The episode ends only
+            # on our own decision clock (which survives the engine's goal re-kickoffs); a timeout
+            # does a full reset (new game). `terminated` (the goal flag) is kept above only so the
+            # reward fn sees the goal, then zeroed.
+            self._ep += 1
+            timeout = self._ep >= self.max_steps
+            if timeout.any():
+                self.state_mutator.reset_mask(self.engine, timeout)
+                state = self.engine.snapshot()  # refreshed post-reset
+            self._ep[timeout] = 0
+            rekickoff = timeout  # clear action history only on a real episode reset
+            terminated = np.zeros_like(terminated)
+            truncated = timeout
+        else:
+            rekickoff = terminated | truncated
+            if rekickoff.any():
+                self.state_mutator.reset_mask(self.engine, rekickoff)
+                state = self.engine.snapshot()  # refreshed post-reset
 
         obs = self.obs_builder.build_obs(state)
         if self.action_stack:
@@ -111,8 +142,8 @@ class Env:
             a[..., 0] -= 1.0
             a[..., 1] -= 1.0
             buf = np.concatenate([buf[..., 3:], a], axis=-1)
-            if done.any():
-                buf[done] = 0.0  # fresh episode -> no action history
+            if rekickoff.any():
+                buf[rekickoff] = 0.0  # fresh kickoff (goal or episode end) -> no action history
             self._act_buf = buf
             obs = np.concatenate([obs, buf], axis=-1)
         self.prev_state = state
@@ -127,17 +158,19 @@ def make_default_env(
     tick_skip: int = 8,
     goal_weight: float = 5.0,
     stadium: str | None = None,
+    kick_values: int = 2,
 ) -> Env:
-    """A sensible baseline 1v1 setup: the bundled CombinedReward, DefaultObs,
-    discrete actions, goal-or-timeout episodes. Swap any piece to experiment.
-    `stadium` picks the map (bundled name or .hbs path); None = built-in classic."""
+    """A sensible baseline setup (1v1 by default; pass n_red/n_blue for team modes): the bundled
+    CombinedReward, DefaultObs, discrete actions, goal-or-timeout episodes. Swap any piece to
+    experiment. `stadium` picks the map (bundled name or .hbs path); None = built-in classic.
+    `kick_values=3` exposes the engine's rapid-fire "rocket" kick as a third action."""
     engine = TransitionEngine(
         n_envs, n_red, n_blue, step_limit=step_limit, tick_skip=tick_skip, stadium=stadium
     )
     return Env(
         engine=engine,
         obs_builder=DefaultObs(),
-        action_parser=DiscreteAction(),
+        action_parser=DiscreteAction(kick_values=kick_values),
         reward_fn=CombinedReward(
             (VelocityPlayerToBall(), 1.0),
             (VelocityBallToGoal(), 1.0),

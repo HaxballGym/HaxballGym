@@ -1,9 +1,13 @@
 [package]
 name = "haxball_core"
-version = "0.3.0"
+version = "1.0.0"
 edition = "2021"
 description = "Headless, vectorized Haxball physics core (RocketSim-equivalent for Haxball)."
-# TODO before a public release: add `license = "..."`, `repository = "..."`, `readme`, `keywords`.
+license = "MIT"
+repository = "https://github.com/HaxballGym/HaxballGym"
+readme = "README.md"
+keywords = ["haxball", "reinforcement-learning", "physics", "simulation", "rl"]
+categories = ["science", "simulation", "game-development"]
 
 [lib]
 name = "haxball_core"

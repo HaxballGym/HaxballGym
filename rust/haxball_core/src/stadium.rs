@@ -330,6 +330,9 @@ pub fn world_from_hbs(json: &str, n_red: usize, n_blue: usize) -> Result<(World,
         spawn_distance: s.spawn_distance.unwrap_or(277.5),
         red_spawn: s.red_spawn.iter().map(|p| [p[0], -p[1]]).collect(),
         blue_spawn: s.blue_spawn.iter().map(|p| [p[0], -p[1]]).collect(),
+        state: crate::physics::STATE_KICKOFF,
+        kicking_team: flag::RED,
+        goal_timer: 0,
     };
     w.reset_positions();
     Ok((w, 0)) // second field kept for API compat; curved segments are now resolved

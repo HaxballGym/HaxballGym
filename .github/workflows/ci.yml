@@ -48,3 +48,4 @@ jobs:
           uv run rust/haxball_core/tests/test_fidelity.py
           uv run haxballgym/tests/test_stadium_geometry.py
           uv run haxballgym/tests/test_stadium_loader.py
+          uv run haxballgym/tests/test_env.py

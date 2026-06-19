@@ -9,6 +9,21 @@ import numpy as np
 from .state import RED, GameState
 
 
+def _field_half(state: GameState) -> np.ndarray:
+    """Per-axis field half-extent (hx, hy) from the stadium's real collision walls. Drop the
+    boundary planes, which wall_segments() renders as huge (±3000) segments."""
+    pts = np.asarray(state.walls, dtype=np.float64).reshape(-1, 2)
+    real = pts[np.abs(pts).max(axis=1) < 1500.0]
+    return np.abs(real if len(real) else pts).max(axis=0)
+
+
+def _derive_pos_coef(state: GameState) -> np.ndarray:
+    """Per-axis position scale (cx, cy) for the "auto" obs normalization: derive it from the
+    stadium's real collision walls so positions land in ~[-1, 1] on ANY map (classic, futsal,
+    big, ...). The 1.1× margin leaves headroom for discs that penetrate a wall slightly."""
+    return 1.0 / np.maximum(_field_half(state) * 1.1, 1.0)
+
+
 class ObsBuilder(ABC):
     @abstractmethod
     def obs_dim(self, n_players: int) -> int: ...
@@ -37,18 +52,8 @@ class DefaultObs(ObsBuilder):
         self.vel_coef = float(vel_coef)
 
     def reset(self, state: GameState) -> None:
-        if self._auto:
-            self.pos_coef = self._derive_pos_coef(state)
-
-    @staticmethod
-    def _derive_pos_coef(state: GameState) -> np.ndarray:
-        # field half-extent from the real collision walls; drop the boundary planes, which
-        # wall_segments() renders as huge (±3000) segments. 1.1× margin leaves headroom for
-        # discs that penetrate a wall slightly (soft collision) so the obs stays within [-1, 1].
-        pts = np.asarray(state.walls, dtype=np.float64).reshape(-1, 2)
-        real = pts[np.abs(pts).max(axis=1) < 1500.0]
-        half = np.abs(real if len(real) else pts).max(axis=0)
-        return 1.0 / np.maximum(half * 1.1, 1.0)
+        if self._auto:  # re-derive every reset so a map switch (curriculum) re-scales
+            self.pos_coef = _derive_pos_coef(state)
 
     def obs_dim(self, n_players: int) -> int:
         return 12 + 4 * (n_players - 1)
@@ -56,7 +61,7 @@ class DefaultObs(ObsBuilder):
     def build_obs(self, state: GameState) -> np.ndarray:
         n, p = state.n_envs, state.n_players
         if self.pos_coef is None:  # auto mode, build_obs called without a prior reset()
-            self.pos_coef = self._derive_pos_coef(state)
+            self.pos_coef = _derive_pos_coef(state)
         pc, vc = self.pos_coef, self.vel_coef
         ppos, pvel = state.player_pos, state.player_vel  # (N,P,2)
         bpos = state.ball_pos[:, None, :]  # (N,1,2)
@@ -109,9 +114,26 @@ class GeoObs(DefaultObs):
     def __init__(self, n_rays: int = 8, max_dist: float = 900.0, **kw):
         super().__init__(**kw)
         self.n_rays = n_rays
-        self.max_dist = float(max_dist)
+        # In "auto" mode (pos_coef="auto") the geo DISTANCE scales follow the map too — else the
+        # ray cap (max_dist) and the player→ball scalar overflow [0,1]/[−1,1] on a big map. They
+        # are derived per-map in reset()/build_obs; otherwise the fixed defaults are used.
+        self.max_dist = None if self._auto else float(max_dist)
+        self._dpb_scale = None if self._auto else 500.0  # player→ball distance normalizer
         ang = np.linspace(0.0, 2 * np.pi, n_rays, endpoint=False)
         self._base_dirs = np.stack([np.cos(ang), np.sin(ang)], axis=-1)  # (R,2) canonical rays
+
+    def _ensure_geo_scale(self, state: GameState) -> None:
+        if self._auto and self.max_dist is None:
+            half = _field_half(state)
+            hx, hy = float(half[0]), float(half[1])
+            self.max_dist = (4.0 * hx * hx + 4.0 * hy * hy) ** 0.5  # full-field diagonal (ray cap)
+            self._dpb_scale = (hx * hx + hy * hy) ** 0.5  # half-field diagonal (player→ball)
+
+    def reset(self, state: GameState) -> None:
+        super().reset(state)  # re-derive pos_coef
+        if self._auto:  # force per-map re-derivation of the distance scales on a map switch
+            self.max_dist = None
+            self._ensure_geo_scale(state)
 
     def obs_dim(self, n_players: int) -> int:
         # base + ball lidar + self lidar + bounce-ray + 6 explicit scalars (player→ball,
@@ -173,12 +195,14 @@ class GeoObs(DefaultObs):
         if walls is None or len(walls) == 0:  # no geometry (shouldn't happen) -> zero-pad
             pad = np.zeros((n, p, 2 * self.n_rays + 1 + 6), dtype=np.float32)
             return np.concatenate([base, pad], axis=-1)
+        self._ensure_geo_scale(state)  # auto mode: derive distance scales (lazy if no reset())
         A, B = np.ascontiguousarray(walls[:, :2]), np.ascontiguousarray(walls[:, 2:])
         obs_ = state.obstacles  # (D,3) post discs [x,y,radius] (or None)
         C = r = None
         if obs_ is not None and len(obs_):
             C, r = np.ascontiguousarray(obs_[:, :2]), np.ascontiguousarray(obs_[:, 2])
         md = self.max_dist
+        assert md is not None and self._dpb_scale is not None  # set by _ensure_geo_scale above
         sx = np.where(state.team == RED, 1.0, -1.0)  # (N,P) canonical x-flip per player
         flip = np.stack([sx, np.ones_like(sx)], axis=-1).reshape(n * p, 2)  # (N*P,2)
 
@@ -192,18 +216,25 @@ class GeoObs(DefaultObs):
         # self lidar: rays around the PLAYER (own wall/post surroundings — positioning, cornering)
         Os = state.player_pos.reshape(n * p, 2)
         slidar = ray(Os, D).reshape(n, p, self.n_rays)
-        # bounce-ray: distance to the wall/post the ball is heading toward (canonical x-flip)
+        # bounce-ray: distance to the wall/post the ball is heading toward. This is a
+        # reflection-invariant SCALAR (how far the ball travels before it hits a wall), so it is
+        # cast in WORLD frame and is identical for both sides — do NOT apply the per-side `flip`
+        # (that mirrors a single real ray into a different physical direction, breaking the
+        # side-symmetry the shared net relies on). The ball lidar above flips a whole canonical
+        # ray-SET, where mirroring only relabels which ray is which, so that one is correct.
         bv = state.ball_vel  # (N,2)
         spd = np.linalg.norm(bv, axis=-1, keepdims=True)
         bdir = np.where(spd > 1e-6, bv / np.maximum(spd, 1e-9), 0.0)  # (N,2)
-        Db = (np.broadcast_to(bdir[:, None, :], (n, p, 2)).reshape(n * p, 2) * flip)[:, None, :]
+        Db = np.broadcast_to(bdir[:, None, :], (n, p, 2)).reshape(n * p, 2)[:, None, :]
         bounce = ray(O, Db).reshape(n, p, 1)
         moving = (spd[:, 0] > 1e-6)[:, None, None]  # still ball -> no imminent bounce (=1.0)
         bounce = np.where(np.broadcast_to(moving, bounce.shape), bounce, 1.0)
         # explicit scalar features (cheap, help a small net not re-derive norms). Non-directional
         # (magnitudes/distances) so they need no x-mirror.
         vc = self.vel_coef
-        d_pb = (np.linalg.norm(state.ball_pos[:, None, :] - state.player_pos, axis=-1) / 500.0)[..., None]
+        d_pb = (np.linalg.norm(state.ball_pos[:, None, :] - state.player_pos, axis=-1) / self._dpb_scale)[
+            ..., None
+        ]
         d_bw = np.broadcast_to((self._nearest_wall(state.ball_pos, A, B) / md)[:, None, None], (n, p, 1))
         d_bp = np.broadcast_to(  # ball -> nearest POST (rocket-pin / block awareness)
             (np.minimum(self._nearest_disc(state.ball_pos, C, r), md) / md)[:, None, None], (n, p, 1)
@@ -239,7 +270,10 @@ class SharedObs(ObsBuilder):
     ):
         self.k_team = k_team
         self.k_opp = k_opp
-        self.pos_coef = np.asarray(pos_coef, dtype=np.float64)
+        # "auto" derives the per-axis scale from the map walls (like DefaultObs) — needed on
+        # non-classic maps (the big map's ±600×±240 field overflows the classic-tuned default).
+        self._auto = isinstance(pos_coef, str) and pos_coef == "auto"
+        self.pos_coef = None if self._auto else np.asarray(pos_coef, dtype=np.float64)
         self.vel_coef = float(vel_coef)
         # x-component column indices (for the blue mirror): the 6 base vectors + each
         # other-slot's rel_pos.x and vel.x (the present flag at +4 is never mirrored).
@@ -250,8 +284,14 @@ class SharedObs(ObsBuilder):
     def obs_dim(self, n_players: int) -> int:
         return 12 + 5 * (self.k_team + self.k_opp)  # constant, ignores n_players
 
+    def reset(self, state: GameState) -> None:
+        if self._auto:  # re-derive every reset so a map switch (curriculum) re-scales
+            self.pos_coef = _derive_pos_coef(state)
+
     def build_obs(self, state: GameState) -> np.ndarray:
         n, p = state.n_envs, state.n_players
+        if self.pos_coef is None:  # auto mode, build_obs called without a prior reset()
+            self.pos_coef = _derive_pos_coef(state)
         pc, vc = self.pos_coef, self.vel_coef
         ppos, pvel = state.player_pos, state.player_vel  # (N,P,2)
         bpos, bvel = state.ball_pos[:, None, :], state.ball_vel[:, None, :]

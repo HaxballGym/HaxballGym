@@ -1,6 +1,6 @@
 [project]
 name = "haxballgym-workspace"
-version = "0.3.0"
+version = "1.0.0"
 description = "Headless vectorized Haxball simulator for RL, plus training and in-browser play (uv workspace root)."
 requires-python = ">=3.12"
 dependencies = [

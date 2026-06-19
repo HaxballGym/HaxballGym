@@ -11,6 +11,8 @@ Quick start:
 Or compose your own from the pieces (engine + obs/action/reward/done/mutator).
 """
 
+__version__ = "1.0.0"
+
 from .action import ActionParser, DiscreteAction
 from .done import DoneCondition, GoalCondition, TimeoutCondition
 from .engine import TransitionEngine
@@ -32,6 +34,7 @@ from .reward import (
     BallToGoalPotential,
     BreakawayReward,
     CombinedReward,
+    CrowdingPenalty,
     CurriculumReward,
     DistanceWeightedAlignment,
     GoalReward,
@@ -40,6 +43,9 @@ from .reward import (
     PossessionReward,
     PowerShotReward,
     RewardFunction,
+    TeammateSpacingReward,
+    TeamPossessionReward,
+    TeamSpiritReward,
     TouchReward,
     TouchVelocityToGoal,
     VelocityBallToGoal,
@@ -49,6 +55,7 @@ from .stadium import BUNDLED, stadium_text
 from .state import BLUE, RED, GameState, closest_on_line
 
 __all__ = [
+    "__version__",
     "Env",
     "make_default_env",
     "TransitionEngine",
@@ -71,6 +78,10 @@ __all__ = [
     "GoalReward",
     "TouchReward",
     "PossessionReward",
+    "TeammateSpacingReward",
+    "TeamPossessionReward",
+    "TeamSpiritReward",
+    "CrowdingPenalty",
     "BallOnOpponentHalf",
     "BallToGoalPotential",
     "LiuDistanceBallToGoal",

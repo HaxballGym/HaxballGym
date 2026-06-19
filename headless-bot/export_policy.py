@@ -70,7 +70,12 @@ def main():
     obs_dim = meta.get("obs_dim") or sd["trunk.0.weight"].shape[1]
     depth = sum(1 for k in sd if k.startswith("trunk.") and k.endswith(".weight"))
     if obs_dim != 16 or depth != 2:
-        print(f"WARNING: bot.js expects obs_dim=16, depth=2 — this is obs_dim={obs_dim}, depth={depth}")
+        raise SystemExit(
+            f"refusing to export: bot.js's buildObs produces the 16-dim DefaultObs (1v1, depth-2 MLP) "
+            f"only, but this checkpoint is obs_dim={obs_dim}, depth={depth}. Deploying it would feed a "
+            f"truncated obs into the policy (silently wrong forward pass). Extend bot.js's buildObs to "
+            f"match this obs (PredictObs/GeoObs/SharedObs/action_stack/team size) before exporting."
+        )
 
     stadium = args.stadium or meta.get("stadium") or "classic"
     pos_coef, goal_x, hbs = stadium_obs_params(stadium)

@@ -4,8 +4,8 @@ A headless, vectorized **Haxball** simulator for reinforcement learning — the
 "RocketSim/RLGym for Haxball" — plus a composable training env, runnable examples,
 and the tools to play your bot back in the real browser game.
 
-The physics is a faithful Rust port of Haxball's, **verified bit-for-bit to 1e-9**,
-stepped in batches of thousands of matches in parallel. That is ~1,000–10,000×
+The physics is a faithful Rust port of Haxball's, **verified to agree with the original
+to within 1e-9**, stepped in batches of thousands of matches in parallel. That is ~1,000–10,000×
 faster than the old Panda3D-based clone, which is the whole reason strong self-play
 is now reachable on a single machine.
 

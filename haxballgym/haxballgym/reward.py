@@ -14,6 +14,34 @@ import numpy as np
 from .state import GameState, closest_on_line
 
 
+def _pairwise_dist(pos: np.ndarray) -> np.ndarray:
+    """(N,P,2) player positions -> (N,P,P) Euclidean distance between every pair of players."""
+    return np.linalg.norm(pos[:, :, None, :] - pos[:, None, :, :], axis=-1)
+
+
+class _SameTeamMask:
+    """Caches the (N,P,P) same-team boolean masks across ticks. Teams are constant within an
+    episode, so the per-tick team rewards needn't rebuild the mask (and the np.eye) every step.
+    Recomputes only when handed a different `team` array — an identity check, since the engine
+    hands back the same static `team` array each tick; a fresh array (tests, replays) just misses
+    the cache and recomputes, so this is always correct, only sometimes faster."""
+
+    def __init__(self) -> None:
+        self._team: np.ndarray | None = None
+        self._same: np.ndarray | None = None
+        self._excl: np.ndarray | None = None
+
+    def get(self, team: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """-> (same, excl): (N,P,P) bool masks, `same` incl. the diagonal (self), `excl` without."""
+        if self._team is not team:
+            self._team = team
+            same = team[:, :, None] == team[:, None, :]
+            self._same = same
+            self._excl = same & ~np.eye(team.shape[1], dtype=bool)[None]
+        assert self._same is not None and self._excl is not None  # set above on any cache miss
+        return self._same, self._excl
+
+
 class RewardFunction(ABC):
     @abstractmethod
     def get_rewards(
@@ -88,6 +116,51 @@ class PossessionReward(RewardFunction):
         closest = np.argmin(d, axis=-1, keepdims=True)  # (N,1)
         idx = np.arange(state.n_players)[None, :]
         return np.where(idx == closest, 1.0, -1.0).astype(np.float32)
+
+
+class TeammateSpacingReward(RewardFunction):
+    """⚠ DISCOURAGED (hand-coded spacing). Per-player anti-swarm signal: reward distance to the
+    NEAREST teammate (saturating at `cap`). Making spacing a PRIMARY reward produced an idle bot
+    that spread out and stopped chasing the ball (the "v5 mistake"). The right way to get NvN
+    teamwork is `TeamSpiritReward` (reward redistribution → cooperation emerges), optionally with
+    a small `CrowdingPenalty` as a SECONDARY anti-scrum term — not this. Kept for experiments.
+    Solo/1v1 players (no teammate) get 0 — no spacing signal — rather than a constant max bias."""
+
+    def __init__(self, cap: float = 300.0):
+        self.cap = float(cap)
+        self._mask = _SameTeamMask()
+
+    def get_rewards(self, state, prev, terminated, truncated):
+        _, excl = self._mask.get(state.team)  # (N,P,P) teammates, excluding self
+        d = np.where(excl, _pairwise_dist(state.player_pos), np.inf)  # only teammates
+        nearest = d.min(axis=-1)  # (N,P) nearest-teammate distance (inf if solo)
+        out = np.minimum(nearest, self.cap) / self.cap  # 0..1, far = good
+        return np.where(np.isinf(nearest), 0.0, out).astype(np.float32)  # solo -> no signal
+
+
+class TeamPossessionReward(RewardFunction):
+    """⚠ DISCOURAGED (hand-coded roles; see `TeammateSpacingReward`). Per-team, per-player: +1 to
+    the player CLOSEST to the ball on each team; a −penalty to teammates who also crowd the ball
+    (within `crowd_dist`) instead of covering. Hand-coding 'one presser + supporters' tends to
+    suppress the ball-chase; prefer `TeamSpiritReward` (+ optional `CrowdingPenalty`). Experiments only."""
+
+    def __init__(self, crowd_dist: float = 160.0, crowd_pen: float = 0.5):
+        self.crowd_dist = float(crowd_dist)
+        self.crowd_pen = float(crowd_pen)
+
+    def get_rewards(self, state, prev, terminated, truncated):
+        d = np.linalg.norm(state.ball_pos[:, None, :] - state.player_pos, axis=-1)  # (N,P)
+        team = state.team
+        idx = np.arange(state.n_players)[None, :]
+        out = np.zeros_like(d, dtype=np.float32)
+        for t in np.unique(team):
+            mask = team == t  # (N,P) this team
+            closest = np.where(mask, d, np.inf).argmin(axis=-1, keepdims=True)  # (N,1)
+            is_closest = (idx == closest) & mask
+            crowding = mask & ~is_closest & (d < self.crowd_dist)  # piling on, not contesting
+            out = np.where(is_closest, 1.0, out)
+            out = np.where(crowding, -self.crowd_pen, out)
+        return out
 
 
 class BallOnOpponentHalf(RewardFunction):
@@ -269,15 +342,81 @@ class CombinedReward(RewardFunction):
         return total
 
 
+class CrowdingPenalty(RewardFunction):
+    """Per-player anti-rugby penalty: for each player, −Σ over same-team others of max(0, 1−dist/
+    crowd_dist) — strongest when teammates are stacked, smoothly zero beyond `crowd_dist`. A SECONDARY
+    term (keep the weight low) layered on top of the working ball-chase + team-spirit reward; it
+    discourages the 3-on-the-ball scrum WITHOUT removing the ball-chase (the v5 mistake was making
+    spacing primary and deleting the chase, which produced an idle bot). Applied OUTSIDE the
+    team-spirit redistribution so each player feels its OWN crowding, not a shared/averaged version."""
+
+    def __init__(self, crowd_dist: float = 80.0):
+        self.crowd_dist = float(crowd_dist)
+        self._mask = _SameTeamMask()
+
+    def get_rewards(self, state, prev, terminated, truncated):
+        _, excl = self._mask.get(state.team)  # (N,P,P) teammates, excluding self
+        d = _pairwise_dist(state.player_pos)  # (N,P,P) pairwise
+        crowd = np.where(excl, np.maximum(0.0, 1.0 - d / self.crowd_dist), 0.0)  # (N,P,P), 0..1
+        return (-crowd.sum(-1)).astype(np.float32)  # (N,P) — negative, biggest when stacked
+
+
+class TeamSpiritReward(RewardFunction):
+    """RLGym's `DistributeRewardsWrapper` — the OpenAI-Five team-spirit credit-assignment scheme,
+    and the ACTUAL way RLGym/Nexto/Seer get teamwork (NOT hand-coded spacing). It wraps a normal
+    per-agent reward and redistributes it:
+
+        spirit_i   = selfishness · own_i + selflessness · mean(team_rewards)
+        adjusted_i = team_coef · spirit_i − opp_coef · mean(opponent_rewards)
+
+    `selflessness` (= "team spirit") blends each agent's reward toward its team mean, so a
+    teammate's good play rewards everyone → cooperation; the −opp_coef·mean(opp) term makes it
+    zero-sum vs the other team → defense. Roles (keeper + attackers) then EMERGE from self-play at
+    scale — you don't reward spacing directly. Keep the base rewards as ordinary per-agent signals
+    (every player still gets VelocityPlayerToBall etc.). Anneal `selflessness` low→high over the run
+    (learn ball mechanics selfishly first, then cooperate) via `set_team_spirit`."""
+
+    def __init__(
+        self,
+        reward_fn: RewardFunction,
+        *,
+        selflessness: float = 0.3,
+        selfishness: float | None = None,
+        team_coef: float = 0.5,
+        opp_coef: float | None = None,
+    ):
+        self.reward_fn = reward_fn
+        self.selflessness = float(selflessness)
+        self.selfishness = (1.0 - self.selflessness) if selfishness is None else float(selfishness)
+        self.team_coef = float(team_coef)
+        self.opp_coef = (1.0 - self.team_coef) if opp_coef is None else float(opp_coef)
+        self._mask = _SameTeamMask()
+
+    def set_team_spirit(self, s: float) -> None:
+        """Anneal hook: set selflessness (team spirit); selfishness tracks as 1−s."""
+        self.selflessness = float(s)
+        self.selfishness = 1.0 - self.selflessness
+
+    def reset(self, state):
+        self.reward_fn.reset(state)
+
+    def get_rewards(self, state, prev, terminated, truncated):
+        base = self.reward_fn.get_rewards(state, prev, terminated, truncated)  # (N,P)
+        same, _ = self._mask.get(state.team)  # (N,P,P): j on i's team (incl. self)
+        opp = ~same
+        team_mean = (base[:, None, :] * same).sum(-1) / np.maximum(same.sum(-1), 1)  # (N,P)
+        opp_mean = (base[:, None, :] * opp).sum(-1) / np.maximum(opp.sum(-1), 1)  # (N,P)
+        spirit = self.selfishness * base + self.selflessness * team_mean
+        return (self.team_coef * spirit - self.opp_coef * opp_mean).astype(np.float32)
+
+
 class CurriculumReward(RewardFunction):
     """A reward whose active term-set CHANGES as the policy improves — the dense→sparse
     staging the top RL bots hand-tune (Necto/Seer), made adaptive: each `tier` is a
     `[(fn, weight), ...]` list, and the trainer advances `level` (via `set_level`) only
     when the bot crosses a skill threshold. So early on it rewards "touch the ball", and
     only "unlocks" positioning / goal-dominant rewards once the bot is good enough.
-
-    `blend` linearly cross-fades between tier[level] and tier[level+1] over `blend` calls
-    after a level-up, so the reward landscape doesn't jump discontinuously."""
+    `set_level` switches tiers directly (a hard cut, not a cross-fade)."""
 
     def __init__(self, tiers: list[list[tuple[RewardFunction, float]]]):
         self.tiers = tiers

@@ -52,7 +52,7 @@ class Policy(nn.Module):
     """A small MLP with a shared trunk and three discrete action heads (move-x, move-y,
     kick) plus a value head. Discrete actions keep it simple and fast."""
 
-    def __init__(self, obs_dim: int, hidden: int = 256, depth: int = 2):
+    def __init__(self, obs_dim: int, hidden: int = 256, depth: int = 2, n_kick: int = 2):
         super().__init__()
         layers, d = [], obs_dim
         for _ in range(depth):
@@ -61,7 +61,7 @@ class Policy(nn.Module):
         self.trunk = nn.Sequential(*layers)
         self.head_x = nn.Linear(hidden, 3)  # dx ∈ {-1, 0, +1}
         self.head_y = nn.Linear(hidden, 3)  # dy ∈ {-1, 0, +1}
-        self.head_k = nn.Linear(hidden, 2)  # kick ∈ {0, 1}
+        self.head_k = nn.Linear(hidden, n_kick)  # kick: 2-way {release, hold} or 3-way {.., rocket}
         self.value = nn.Linear(hidden, 1)
 
     def forward(self, obs):
@@ -96,7 +96,7 @@ def chase_action(obs_red, state, n_envs):
 @torch.no_grad()
 def eval_vs_chase(model, n_envs=256, steps=400):
     """Play the model (RED) vs the chase bot (BLUE); return (red_goals, blue_goals)."""
-    env = make_default_env(n_envs, 1, 1)
+    env = make_default_env(n_envs, 1, 1, kick_values=model.head_k.out_features)
     obs = env.reset()
     rg = bg = 0
     od = obs.shape[-1]
@@ -119,15 +119,24 @@ def main():
     ap.add_argument("--iters", type=int, default=600)
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--depth", type=int, default=2)
+    ap.add_argument(
+        "--kick-values",
+        type=int,
+        default=2,
+        choices=(2, 3),
+        help="2 = release/hold; 3 adds the rapid-fire 'rocket' kick",
+    )
     ap.add_argument("--out", default=os.path.join(HERE, "checkpoints", "model.pt"))
     args = ap.parse_args()
 
-    env = make_default_env(N_ENVS, 1, 1)
+    env = make_default_env(N_ENVS, 1, 1, kick_values=args.kick_values)
     obs_dim = env.obs_dim
     P = env.n_players  # 2 for 1v1
-    print(f"obs_dim={obs_dim}  players={P}  envs={N_ENVS}  iters={args.iters}")
+    print(
+        f"obs_dim={obs_dim}  players={P}  envs={N_ENVS}  kick_values={args.kick_values}  iters={args.iters}"
+    )
 
-    model = Policy(obs_dim, args.hidden, args.depth).to(DEVICE)
+    model = Policy(obs_dim, args.hidden, args.depth, n_kick=args.kick_values).to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
 
     # Self-play: the learner controls one team; half the envs it's red, half blue (one net
@@ -142,7 +151,7 @@ def main():
     learner_pos, opp_pos = np.concatenate(lp), np.concatenate(op)
     learner_pos_t = torch.as_tensor(learner_pos)
     opp_pos_t = torch.as_tensor(opp_pos)
-    opp_model = Policy(obs_dim, args.hidden, args.depth).to(DEVICE)
+    opp_model = Policy(obs_dim, args.hidden, args.depth, n_kick=args.kick_values).to(DEVICE)
     pool: list[dict] = []
     B = len(learner_pos)
 
