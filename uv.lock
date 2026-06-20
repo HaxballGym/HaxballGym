@@ -107,7 +107,7 @@ requires-dist = [{ name = "numpy", specifier = ">=1.23" }]
 
 [[package]]
 name = "haxballgym"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "haxballgym" }
 dependencies = [
     { name = "haxball-core" },
