@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "haxballgym"
-version = "1.0.0"
+version = "1.0.1"
 description = "Composable, batched RLGym-v2-style env over the headless haxball_core engine."
 requires-python = ">=3.12"
 license = "MIT"

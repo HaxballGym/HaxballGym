@@ -7,6 +7,8 @@ the env is reset and the returned obs is the fresh post-reset observation.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from .action import ActionParser, DiscreteAction
@@ -105,6 +107,7 @@ class Env:
         engine_actions = self.action_parser.parse_actions(actions)
         engine_actions[..., 0] *= self._mirror_x  # un-mirror dx for blue
         state = self.engine.step(engine_actions)
+        scored = state.scored  # who conceded THIS step; preserved across the auto-reset below
 
         terminated = self.termination_cond.is_done(state)  # (N,) goal scored this step
         # In continuous mode this engine-tick `truncated` is overridden below by the decision
@@ -124,7 +127,9 @@ class Env:
             timeout = self._ep >= self.max_steps
             if timeout.any():
                 self.state_mutator.reset_mask(self.engine, timeout)
-                state = self.engine.snapshot()  # refreshed post-reset
+                # post-reset positions, but keep THIS step's `scored` (the reset would zero it,
+                # making goals invisible to metrics/eval that read `state.scored`).
+                state = replace(self.engine.snapshot(), scored=scored)
             self._ep[timeout] = 0
             rekickoff = timeout  # clear action history only on a real episode reset
             terminated = np.zeros_like(terminated)
@@ -133,7 +138,9 @@ class Env:
             rekickoff = terminated | truncated
             if rekickoff.any():
                 self.state_mutator.reset_mask(self.engine, rekickoff)
-                state = self.engine.snapshot()  # refreshed post-reset
+                # post-reset positions, but keep THIS step's `scored` (the reset would zero it,
+                # making goals invisible to metrics/eval that read `state.scored`).
+                state = replace(self.engine.snapshot(), scored=scored)
 
         obs = self.obs_builder.build_obs(state)
         if self.action_stack:

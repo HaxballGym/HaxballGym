@@ -161,6 +161,28 @@ def test_engine_validation():
     print("engine validation (n_envs / players / offsets) OK")
 
 
+def test_scored_survives_reset():
+    # A goal triggers an auto-rekickoff inside env.step; `state.scored` must still report the
+    # conceding team for that step. Regression: the reset snapshot used to overwrite it to -1,
+    # so goals were invisible to anything reading `scored` (metrics/eval silently saw 0).
+    env = make_default_env(n_envs=64, n_red=1, n_blue=1)
+    obs = env.reset()
+    goals = scored = 0
+    for _ in range(600):  # both players chase the ball + kick -> real goals
+        s = env.prev_state
+        d = s.ball_pos[:, None, :] - s.player_pos  # (N, P, 2)
+        dist = np.hypot(d[..., 0], d[..., 1])
+        bx = np.where(d[..., 0] > 5, 2, np.where(d[..., 0] < -5, 0, 1))
+        by = np.where(d[..., 1] > 5, 2, np.where(d[..., 1] < -5, 0, 1))
+        acts = np.stack([bx, by, (dist < 34).astype(np.int64)], -1)
+        obs, rew, term, trunc = env.step(acts)
+        goals += int(term.sum())  # GoalCondition fired this step
+        scored += int((env.prev_state.scored != -1).sum())  # goal visible via scored
+    assert goals > 0, "no goals scored — test setup broken"
+    assert scored == goals, f"scored ({scored}) != goals ({goals}): scored lost across auto-reset"
+    print("scored survives auto-reset OK")
+
+
 if __name__ == "__main__":
     test_env_loop()
     test_continuous_validation_and_run()
@@ -168,4 +190,5 @@ if __name__ == "__main__":
     test_team_rewards()
     test_kickoff_barrier()
     test_engine_validation()
+    test_scored_survives_reset()
     print("\nENV TESTS OK")

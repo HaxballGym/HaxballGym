@@ -11,7 +11,7 @@ Quick start:
 Or compose your own from the pieces (engine + obs/action/reward/done/mutator).
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from .action import ActionParser, DiscreteAction
 from .done import DoneCondition, GoalCondition, TimeoutCondition
